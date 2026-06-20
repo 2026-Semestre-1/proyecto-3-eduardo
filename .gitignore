@@ -2,3 +2,6 @@ Docs/Extras/
 
 # Archivos de compilacion.
 target/
+
+# Archivos del sistema.
+miDiscoDuro.fs
