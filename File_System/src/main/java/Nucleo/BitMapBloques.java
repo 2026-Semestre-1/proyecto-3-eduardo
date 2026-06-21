@@ -14,6 +14,19 @@ public class BitMapBloques {
 
     public BitMapBloques(int total) {
         bloques = new boolean[total];
+        bloques[0] = true; // MBR
+        bloques[1] = true; // Boot
+        bloques[2] = true; // Superbloque
+        bloques[3] = true; // (extra reservado)
+        bloques[4] = true; // Bitmap
+        // Reservar tabla de inodos (ejemplo: 5–100)
+        for (int i = 5; i <= 100; i++) {
+            bloques[i] = true;
+        }
+    }
+
+    public boolean[] get_bloques() {
+        return bloques;
     }
 
     public int buscar_libre() {

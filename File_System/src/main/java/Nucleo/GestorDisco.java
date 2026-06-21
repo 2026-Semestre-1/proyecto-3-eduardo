@@ -2,6 +2,8 @@ package Nucleo;
 
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import Nucleo.MasterBootRecorder.MBR;
@@ -39,6 +41,7 @@ public class GestorDisco {
             archivo.write(sb.serializar());
 
             // Inicializar bitmap con todos libres
+            sb.bloques_libres = sb.bloques_totales - 101;
             BitMapBloques bm = new BitMapBloques(sb.bloques_totales);
             /// byte[] bmBytes = bm.serializar();
             archivo.seek(4 * tam_bloque);
@@ -46,7 +49,9 @@ public class GestorDisco {
             // archivo.write(bmBytes); // luego los datos binarios
             archivo.write(bm.serializar());
             System.out.println("Bitmap inicializado con " + sb.bloques_totales + " bloques libres.");
+            // sb.bloques_libres = sb.bloques_totales - 101;
 
+            // Descontar los bloques reservados para el sistema.
             // Crear usuario root
             GestorUsuarios usuarios = new GestorUsuarios();
             usuarios.crear_usuario_root();
@@ -121,25 +126,40 @@ public class GestorDisco {
             // Actualizar superbloque
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
+
+            // Mostrar la estructura de asignacion actual:
+            debug_dump_bitmap(150);
         }
     }
 
     public int asignar_bloque_libre() throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             System.out.println("Buscando bloque libre...");
-            // El bitmap está en el bloque 4
-            // archivo.seek(4 * tam_bloque);
-            // int longitud = archivo.readInt(); // recuperamos la longitud real
-            // byte[] buffer = new byte[longitud];
-            // archivo.readFully(buffer);
-
+            // El bitmap esta en el bloque 4
             archivo.seek(4 * tam_bloque);
-            byte[] buffer = new byte[tam_bloque];
-            archivo.read(buffer);
+
+            // Leer el tamaño total de bloques primero
+            int total = archivo.readInt();
+            // Calculamos el tamaño esperado: 4 bytes del int + total booleans
+            int longitud = 4 + total;
+            byte[] buffer = new byte[longitud];
+
+            // Ya leímos el primer int, lo incluimos en el buffer manualmente
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeInt(total);
+
+            // Leer el resto de los booleanos
+            byte[] resto = new byte[total];
+            archivo.readFully(resto);
+            dos.write(resto);
+
+            buffer = baos.toByteArray();
 
             System.out.println("pass 1");
             BitMapBloques bm = BitMapBloques.deserializar(buffer);
             System.out.println("pass 2");
+
             int bloque_libre = bm.buscar_libre();
             if (bloque_libre == -1) {
                 throw new IOException("No hay bloques libres disponibles.");
@@ -148,11 +168,12 @@ public class GestorDisco {
 
             bm.marcar_ocupado(bloque_libre);
             System.out.println("pass 4");
+
             // Guardar bitmap actualizado
             archivo.seek(4 * tam_bloque);
-            System.out.println("pass 5");
             archivo.write(bm.serializar());
             System.out.println("Bloque asignado: " + bloque_libre);
+
             return bloque_libre;
         }
     }
@@ -180,9 +201,13 @@ public class GestorDisco {
             for (String entrada : entradas) {
                 if (!entrada.isBlank()) {
                     String[] partes = entrada.split(";");
-                    String nombre = partes[0];
-                    String tipo = partes[1];
-                    System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre);
+                    if (partes.length >= 2) {
+                        String nombre = partes[0];
+                        String tipo = partes[1];
+                        System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre);
+                    } else {
+                        System.out.println("Entrada inválida: " + entrada);
+                    }
                 }
             }
         }
@@ -207,6 +232,29 @@ public class GestorDisco {
             }
         }
         return -1;
+    }
+
+    public void debug_dump_bitmap(int cantidad) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
+            archivo.seek(4 * tam_bloque);
+
+            // Leer el total de bloques
+            int total = archivo.readInt();
+            BitMapBloques bm = new BitMapBloques(total);
+
+            // Leer todos los booleanos
+            for (int i = 0; i < total; i++) {
+                bm.marcar_libre(i); // inicializamos
+                bm.get_bloques()[i] = archivo.readBoolean();
+            }
+
+            // Mostrar los primeros 'cantidad' bloques
+            System.out.println("=== DEBUG BITMAP ===");
+            for (int i = 0; i < cantidad && i < total; i++) {
+                System.out.println("Bloque " + i + ": " + (bm.get_bloques()[i] ? "Ocupado (1)" : "Libre (0)"));
+            }
+            System.out.println("====================");
+        }
     }
 
 }

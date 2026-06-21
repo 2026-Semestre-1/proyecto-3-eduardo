@@ -1,6 +1,7 @@
 package Terminal;
 
 import Terminal.Comandos.*;
+import Nucleo.GestorDisco;
 
 import java.util.Scanner;
 
@@ -37,6 +38,7 @@ public class Terminal {
                 case "mkdir":
                     Comando_mkdir cmdMkdir = new Comando_mkdir();
                     cmdMkdir.ejecutar(partes);
+                    // debug_dump_bitmap(20);
                     break;
 
                 case "ls":
@@ -50,4 +52,5 @@ public class Terminal {
         }
         // sc.close();
     }
+
 }
