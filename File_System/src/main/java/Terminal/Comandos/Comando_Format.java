@@ -2,7 +2,7 @@ package Terminal.Comandos;
 
 import Nucleo.GestorDisco;
 
-public class ComandoFormat implements Comando {
+public class Comando_Format implements Comando {
 
     @Override
     public String nombre_comando() {
