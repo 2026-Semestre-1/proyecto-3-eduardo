@@ -16,8 +16,19 @@ public class GestorDisco {
     private String ruta;
     private final int tam_bloque = 4096; // fijo interno
 
+    private static int cwd_inodo = 5; // Inoddo del directorio actual, por defecto apunta al root.
+
     public GestorDisco(String ruta) {
         this.ruta = ruta;
+
+    }
+
+    public int getCwdInodo() {
+        return cwd_inodo;
+    }
+
+    public void setCwdInodo(int cwd_inodo) {
+        this.cwd_inodo = cwd_inodo;
     }
 
     public void formatear_disco(int tam_mb) throws IOException {
@@ -40,39 +51,44 @@ public class GestorDisco {
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
 
-            // Inicializar bitmap con todos libres
-            sb.bloques_libres = sb.bloques_totales - 101;
+            // Inicializar bitmap
             BitMapBloques bm = new BitMapBloques(sb.bloques_totales);
-            /// byte[] bmBytes = bm.serializar();
-            archivo.seek(4 * tam_bloque);
-            // archivo.writeInt(bmBytes.length); // primero escribimos la longitud real
-            // archivo.write(bmBytes); // luego los datos binarios
-            archivo.write(bm.serializar());
-            System.out.println("Bitmap inicializado con " + sb.bloques_totales + " bloques libres.");
-            // sb.bloques_libres = sb.bloques_totales - 101;
 
-            // Descontar los bloques reservados para el sistema.
+            // Reservar bloques de gestión (0–100)
+            for (int i = 0; i <= 100; i++) {
+                bm.marcar_ocupado(i);
+            }
+
+            // Asignar bloque de datos 101 al root
+            int bloque_root_datos = 101;
+            bm.marcar_ocupado(bloque_root_datos);
+
+            // Ajustar superbloque
+            sb.bloques_libres = sb.bloques_totales - 102; // reservados 0–101
+            archivo.seek(2 * tam_bloque);
+            archivo.write(sb.serializar());
+
+            // Guardar bitmap actualizado
+            archivo.seek(4 * tam_bloque);
+            archivo.write(bm.serializar());
+            System.out.println(
+                    "Bitmap inicializado con " + sb.bloques_totales + " bloques, libres: " + sb.bloques_libres);
+
+            // Crear inodo root en bloque 5
+            Inodo root = new Inodo("root", "root", "root", true, bloque_root_datos);
+            archivo.seek(5 * tam_bloque);
+            archivo.write(root.serializar());
+
+            // Inicializar contenido del root
+            String contenidoRoot = ".;dir;5\n..;dir;5\n";
+            archivo.seek(bloque_root_datos * tam_bloque);
+            archivo.write(contenidoRoot.getBytes(StandardCharsets.UTF_8));
+
             // Crear usuario root
             GestorUsuarios usuarios = new GestorUsuarios();
             usuarios.crear_usuario_root();
         }
     }
-
-    // public void mostrar_info() {
-    // File f = new File(ruta);
-    // if (f.exists()) {
-    // long tam_bytes = f.length();
-    // long tam_mb = tam_bytes / (1024 * 1024);
-    // System.out.println("Nombre del FileSystem: miFS");
-    // System.out.println("Tamaño: " + tam_mb + " MB");
-
-    // // Por ahora espacio usado = 0, disponible = total
-    // System.out.println("Espacio utilizado: 0 MB");
-    // System.out.println("Disponible: " + tam_mb + " MB");
-    // } else {
-    // System.out.println("El disco no existe.");
-    // }
-    // }
 
     public void mostrar_info() {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
@@ -93,7 +109,7 @@ public class GestorDisco {
         }
     }
 
-    public void crear_directorio(String nombre) throws IOException {
+    public void crear_directorio(String nombre, int inodoPadre) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             // Leer superbloque
             archivo.seek(2 * tam_bloque);
@@ -111,24 +127,39 @@ public class GestorDisco {
             int indice_inodo = buscar_inodo_libre();
             if (indice_inodo < 0)
                 throw new IOException("No hay inodos libres disponibles.");
+            int inodoNuevo = 5 + indice_inodo;
 
             // Crear inodo y escribirlo en tabla
             Inodo nuevo = new Inodo(nombre, "root", "root", true, bloque_contenido);
-            archivo.seek((5 + indice_inodo) * tam_bloque);
+            archivo.seek(inodoNuevo * tam_bloque);
             archivo.write(nuevo.serializar());
 
-            // Inicializar contenido del directorio
-            String contenido = ".;dir;" + indice_inodo + "\n" +
-                    "..;dir;" + 0 + "\n"; // 0 = root
+            // Inicializar contenido del nuevo directorio
+            String contenido = ".;dir;" + inodoNuevo + "\n" +
+                    "..;dir;" + inodoPadre + "\n";
             archivo.seek(bloque_contenido * tam_bloque);
             archivo.write(contenido.getBytes(StandardCharsets.UTF_8));
+
+            // Añadir entrada en el directorio padre
+            archivo.seek(inodoPadre * tam_bloque);
+            byte[] bufferPadre = new byte[tam_bloque];
+            archivo.read(bufferPadre);
+            Inodo padre = Inodo.deserializar(bufferPadre);
+
+            archivo.seek(padre.bloque_asignado * tam_bloque);
+            byte[] bufferContenidoPadre = new byte[tam_bloque];
+            archivo.read(bufferContenidoPadre);
+            String contenidoPadre = new String(bufferContenidoPadre, StandardCharsets.UTF_8).trim();
+            contenidoPadre += nombre + ";dir;" + inodoNuevo + "\n";
+
+            archivo.seek(padre.bloque_asignado * tam_bloque);
+            archivo.write(contenidoPadre.getBytes(StandardCharsets.UTF_8));
 
             // Actualizar superbloque
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
 
-            // Mostrar la estructura de asignacion actual:
-            debug_dump_bitmap(150);
+            System.out.println("Directorio creado: " + nombre + " (inodo " + inodoNuevo + ")");
         }
     }
 
@@ -178,10 +209,10 @@ public class GestorDisco {
         }
     }
 
-    public void listar_directorio_actual() throws IOException {
+    public void listar_directorio_actual(int inodoActual) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
-            // Obtener inodo del directorio actual (ejemplo: root en bloque 5)
-            archivo.seek(5 * tam_bloque);
+            // Obtener inodo del directorio actual
+            archivo.seek(inodoActual * tam_bloque);
             byte[] bufferInodo = new byte[tam_bloque];
             archivo.read(bufferInodo);
             Inodo dirActual = Inodo.deserializar(bufferInodo);
@@ -204,7 +235,12 @@ public class GestorDisco {
                     if (partes.length >= 2) {
                         String nombre = partes[0];
                         String tipo = partes[1];
-                        System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre);
+                        if (partes.length == 3) {
+                            System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre + " (inodo "
+                                    + partes[2] + ")");
+                        } else {
+                            System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre);
+                        }
                     } else {
                         System.out.println("Entrada inválida: " + entrada);
                     }

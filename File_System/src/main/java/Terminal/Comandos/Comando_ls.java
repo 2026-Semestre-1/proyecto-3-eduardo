@@ -13,7 +13,8 @@ public class Comando_ls implements Comando {
     public void ejecutar(String[] args) {
         try {
             GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
-            disco.listar_directorio_actual();
+            System.out.println(disco.getCwdInodo());
+            disco.listar_directorio_actual(disco.getCwdInodo());
         } catch (Exception e) {
             System.out.println("Error al listar directorio: " + e.getMessage());
         }
