@@ -12,6 +12,7 @@ import java.io.IOException;
 import Nucleo.MasterBootRecorder.MBR;
 import Nucleo.MasterBootRecorder.ParticionBoot;
 import Usuarios.GestorUsuarios;
+import Utils.manipular_contenido_bloques;
 import Directorios.Inodo;
 
 public class GestorDisco {
@@ -92,13 +93,14 @@ public class GestorDisco {
 
             // Crear inodo root en bloque root.
             Inodo root = new Inodo("root", "root", "root", true, bloques_root_asignados);
-            archivo.seek(cwd_inodo * tam_bloque);
-            // archivo.write(root.serializar());
+            Inodo.escribirInodo(archivo, cwd_inodo, root);
+            // archivo.seek(cwd_inodo * tam_bloque);
+            // // archivo.write(root.serializar());
 
-            // Modificar para guardar el tamaño esperado tambien.
-            byte[] datosRoot = root.serializar();
-            archivo.writeInt(datosRoot.length);
-            archivo.write(datosRoot);
+            // // Modificar para guardar el tamaño esperado tambien.
+            // byte[] datosRoot = root.serializar();
+            // archivo.writeInt(datosRoot.length);
+            // archivo.write(datosRoot);
 
             // Inicializar contenido del root
             String contenidoRoot = ".;dir;" + cwd_inodo + "\n..;dir;" + cwd_inodo + "\n";
@@ -135,8 +137,8 @@ public class GestorDisco {
 
             int inodoPadre = cwd_inodo;
 
-            System.out.println("Mostrando Inodo Padre Pass 1--");
-            debug_dump_inodo(inodoPadre);
+            // System.out.println("Mostrando Inodo Padre Pass 1--");
+            // debug_dump_inodo(inodoPadre);
             // Leer superbloque
             archivo.seek(2 * tam_bloque);
             byte[] buffer = new byte[tam_bloque];
@@ -146,8 +148,8 @@ public class GestorDisco {
             // System.out.println("Gestor Disco (Crear_Directorio): Pass1 -- inodoPadre: " +
             // inodoPadre);
 
-            System.out.println("Mostrando Inodo Padre Pass 2");
-            debug_dump_inodo(inodoPadre);
+            // System.out.println("Mostrando Inodo Padre Pass 2");
+            // debug_dump_inodo(inodoPadre);
 
             // Asignar bloque libre para contenido
             int bloque_contenido = asignar_bloque_libre();
@@ -155,8 +157,8 @@ public class GestorDisco {
                 throw new IOException("No hay bloques libres disponibles.");
             sb.bloques_libres--;
 
-            System.out.println("Mostrando Inodo Padre Pass 3--");
-            debug_dump_inodo(inodoPadre);
+            // System.out.println("Mostrando Inodo Padre Pass 3--");
+            // debug_dump_inodo(inodoPadre);
 
             // System.out.println("Gestor Disco (Crear_Directorio): Pass2");
 
@@ -172,17 +174,18 @@ public class GestorDisco {
                 throw new IOException("No hay inodos libres disponibles.");
             int inodoNuevo = 11 + indice_inodo; // Tomar en cuenta del primer Inodo en donde esta root.
 
-            System.out.println("Mostrando Inodo Padre Pass 4 --");
-            debug_dump_inodo(inodoPadre);
+            // System.out.println("Mostrando Inodo Padre Pass 4 --");
+            // debug_dump_inodo(inodoPadre);
 
             // System.out.println("Gestor Disco (Crear_Directorio): Pass4");
 
             // Crear inodo hijo y escribirlo en tabla
             Inodo nuevo = new Inodo(nombre, "root", "root", true, bloques_asignados);
-            archivo.seek(inodoNuevo * tam_bloque);
-            byte[] datosInodo = nuevo.serializar();
-            archivo.writeInt(datosInodo.length); // longitud primero
-            archivo.write(datosInodo); // luego los datos
+            Inodo.escribirInodo(archivo, inodoNuevo, nuevo);
+            // archivo.seek(inodoNuevo * tam_bloque);
+            // byte[] datosInodo = nuevo.serializar();
+            // archivo.writeInt(datosInodo.length); // longitud primero
+            // archivo.write(datosInodo); // luego los datos
 
             // System.out.println("Gestor Disco (Crear_Directorio): Pass5");
 
@@ -195,22 +198,27 @@ public class GestorDisco {
             // System.out.println("Gestor Disco (Crear_Directorio): Pass6");
 
             // Añadir entrada en el directorio padre
-            long posicion = inodoPadre * tam_bloque;
-            archivo.seek(posicion);
+            // long posicion = inodoPadre * tam_bloque;
+            // archivo.seek(posicion);
 
-            // Opcional: inspección de bytes crudos ANTES de leer longitud
-            byte[] raw = new byte[16];
-            archivo.read(raw);
-            // System.out.println("Bytes crudos del inodo padre: " + Arrays.toString(raw));
+            // // Opcional: inspección de bytes crudos ANTES de leer longitud
+            // byte[] raw = new byte[16];
+            // archivo.read(raw);
+            // // System.out.println("Bytes crudos del inodo padre: " +
+            // Arrays.toString(raw));
 
-            // Reposicionar y leer longitud + datos
-            archivo.seek(posicion);
-            int longitud = archivo.readInt();
-            // System.out.println("Longitud del inodo padre: " + longitud);
+            // // Reposicionar y leer longitud + datos
+            // archivo.seek(posicion);
+            // int longitud = archivo.readInt();
+            // // System.out.println("Longitud del inodo padre: " + longitud);
 
-            byte[] bufferPadre = new byte[longitud];
-            archivo.readFully(bufferPadre);
-            Inodo padre = Inodo.deserializar(bufferPadre);
+            // byte[] bufferPadre = new byte[longitud];
+            // archivo.readFully(bufferPadre);
+            // Inodo padre = Inodo.deserializar(bufferPadre);
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+            if (padre.bloques_asignados == null || padre.bloques_asignados.isEmpty()) {
+                throw new IOException("El inodo padre no tiene bloques asignados.");
+            }
 
             // System.out.println("Gestor Disco (Crear_Directorio): Pass7");
 
@@ -223,7 +231,8 @@ public class GestorDisco {
             byte[] bufferContenidoPadre = new byte[tam_bloque];
             archivo.read(bufferContenidoPadre);
             String contenidoPadre = new String(bufferContenidoPadre, StandardCharsets.UTF_8).trim();
-            contenidoPadre += nombre + ";dir;" + inodoNuevo + "\n";
+            contenidoPadre += "\n" + nombre + ";dir;" + inodoNuevo + "\n";
+            System.out.println("Contenido del padre: " + contenidoPadre);
 
             // System.out.println("Gestor Disco (Crear_Directorio): Pass9");
 
@@ -273,25 +282,38 @@ public class GestorDisco {
         }
     }
 
-    public void listar_directorio_actual(int inodoActual) throws IOException {
+    public void listar_directorio_actual(int inodoActual, boolean recursivo) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
-            // Obtener inodo del directorio actual
-            archivo.seek(inodoActual * tam_bloque);
-            byte[] bufferInodo = new byte[tam_bloque];
-            archivo.read(bufferInodo);
-            Inodo dirActual = Inodo.deserializar(bufferInodo);
 
-            // Leer contenido del bloque asignado
-            archivo.seek(dirActual.bloques_asignados.get(0) * tam_bloque);
-            byte[] buffer = new byte[tam_bloque];
-            archivo.read(buffer);
+            System.out.println("Mostrando Inodo Actual Pass 1--");
+            debug_dump_inodo(inodoActual);
 
-            String contenido = new String(buffer, StandardCharsets.UTF_8).trim();
+            // Obtener inodo del directorio actual con función centralizada
+            Inodo dirActual = Inodo.leerInodo(archivo, inodoActual);
+
+            System.out.println("===== LISTANDO DIRECTORIO INODO " + inodoActual + " =====");
+
+            if (dirActual.bloques_asignados == null || dirActual.bloques_asignados.isEmpty()) {
+                System.out.println("Directorio vacío (sin bloques asignados).");
+                return;
+            }
+
+            // Leer contenido de todos los bloques asignados
+            StringBuilder contenidoTotal = new StringBuilder();
+            for (int bloque : dirActual.bloques_asignados) {
+                String contenidoBloque = manipular_contenido_bloques.leerBloque(archivo, bloque, tam_bloque);
+                if (!contenidoBloque.isEmpty()) {
+                    contenidoTotal.append(contenidoBloque).append("\n");
+                }
+            }
+
+            String contenido = contenidoTotal.toString().trim();
             if (contenido.isEmpty()) {
                 System.out.println("Directorio vacío.");
                 return;
             }
 
+            // Procesar entradas
             String[] entradas = contenido.split("\n");
             for (String entrada : entradas) {
                 if (!entrada.isBlank()) {
@@ -300,8 +322,14 @@ public class GestorDisco {
                         String nombre = partes[0];
                         String tipo = partes[1];
                         if (partes.length == 3) {
-                            System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre + " (inodo "
-                                    + partes[2] + ")");
+                            int hijoInodo = Integer.parseInt(partes[2]);
+                            System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") +
+                                    nombre + " (inodo " + hijoInodo + ")");
+
+                            // Si es recursivo y es un directorio, listar su contenido
+                            if (recursivo && tipo.equals("dir") && !nombre.equals(".") && !nombre.equals("..")) {
+                                listar_directorio_actual(hijoInodo, true);
+                            }
                         } else {
                             System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre);
                         }
@@ -310,6 +338,8 @@ public class GestorDisco {
                     }
                 }
             }
+
+            System.out.println("=====================================");
         }
     }
 
