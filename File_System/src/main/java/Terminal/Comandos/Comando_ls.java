@@ -23,7 +23,6 @@ public class Comando_ls implements Comando {
                 }
             }
 
-            System.out.println(disco.getCwdInodo());
             disco.listar_directorio_actual(disco.getCwdInodo(), recursivo);
         } catch (Exception e) {
             System.out.println("Error al listar directorio: " + e.getMessage());

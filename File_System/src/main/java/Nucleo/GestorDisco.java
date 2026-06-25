@@ -250,6 +250,61 @@ public class GestorDisco {
         }
     }
 
+    public void crear_archivo(String nombre, String usuarioActual, String grupoActual)
+            throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+
+            int inodoPadre = getCwdInodo();
+
+            // Leer superbloque
+            archivo.seek(2 * tam_bloque);
+            byte[] buffer = new byte[tam_bloque];
+            archivo.read(buffer);
+            SuperBloque sb = SuperBloque.deserializar(buffer);
+
+            // Asignar bloque libre para contenido
+            int bloque_contenido = asignar_bloque_libre();
+            if (bloque_contenido < 0)
+                throw new IOException("No hay bloques libres disponibles.");
+            sb.bloques_libres--;
+
+            // Crear lista de bloques asignados
+            List<Integer> bloques_asignados = new ArrayList<>();
+            bloques_asignados.add(bloque_contenido);
+
+            // Buscar inodo libre
+            int indice_inodo = buscar_inodo_libre();
+            if (indice_inodo < 0)
+                throw new IOException("No hay inodos libres disponibles.");
+            int inodoNuevo = 11 + indice_inodo;
+
+            // Crear inodo de archivo
+            Inodo nuevo = new Inodo(nombre, usuarioActual, grupoActual, false, bloques_asignados);
+            Inodo.escribirInodo(archivo, inodoNuevo, nuevo);
+
+            // Inicializar bloque de datos vacío
+            manipular_contenido_bloques.escribirBloque(archivo, bloque_contenido, "", tam_bloque);
+
+            // Leer inodo padre
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+            // Actualizar contenido del directorio padre
+            int bloquePadreDatos = padre.bloques_asignados.get(0);
+            String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadreDatos, tam_bloque);
+            if (!contenidoPadre.endsWith("\n")) {
+                contenidoPadre += "\n";
+            }
+            contenidoPadre += nombre + ";file;" + inodoNuevo + "\n";
+            manipular_contenido_bloques.escribirBloque(archivo, bloquePadreDatos, contenidoPadre, tam_bloque);
+
+            // Actualizar superbloque
+            archivo.seek(2 * tam_bloque);
+            archivo.write(sb.serializar());
+
+            System.out.println("Archivo creado: " + nombre + " (inodo " + inodoNuevo + ")");
+        }
+    }
+
     public int asignar_bloque_libre() throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             System.out.println("Buscando bloque libre...");

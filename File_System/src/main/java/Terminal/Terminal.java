@@ -46,6 +46,11 @@ public class Terminal {
                     cmdLs.ejecutar(partes);
                     break;
 
+                case "touch":
+                    Comando_Touch cmdTouch = new Comando_Touch();
+                    cmdTouch.ejecutar(partes);
+                    break;
+
                 default:
                     System.out.println("Comando no reconocido: " + comando);
             }
