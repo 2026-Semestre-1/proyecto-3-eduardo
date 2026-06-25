@@ -26,6 +26,10 @@ public class Comando_Format implements Comando {
 
             GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
             disco.formatear_disco(tam_mb);
+
+            // Print de DEBUG.
+            GestorDisco disco2 = new GestorDisco("miDiscoDuro.fs");
+            // disco2.debug_dump_inodo(5);
             System.out.println("Disco formateado con éxito. Usuario root creado.");
             // sc.close();
         } catch (Exception e) {

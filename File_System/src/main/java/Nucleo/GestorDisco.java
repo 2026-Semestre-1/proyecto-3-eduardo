@@ -2,6 +2,9 @@ package Nucleo;
 
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -16,7 +19,7 @@ public class GestorDisco {
     private String ruta;
     private final int tam_bloque = 4096; // fijo interno
 
-    private static int cwd_inodo = 5; // Inoddo del directorio actual, por defecto apunta al root.
+    private static int cwd_inodo = 11; // Inoddo del directorio actual, por defecto apunta al root.
 
     public GestorDisco(String ruta) {
         this.ruta = ruta;
@@ -34,6 +37,8 @@ public class GestorDisco {
     public void formatear_disco(int tam_mb) throws IOException {
         int tam_bytes = tam_mb * 1024 * 1024;
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+
+            cwd_inodo = 11; // Aqui empiezan los inodos root, antes de esto son reservados para el sistema.
             archivo.setLength(tam_bytes);
 
             // Escribir MBR
@@ -51,6 +56,10 @@ public class GestorDisco {
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
 
+            // >> Hasta aqui todo normal, no se hay que modificar.
+
+            // >> A partir de aqui se debe modificar y tener cuidado con lo del bitmap
+
             // Inicializar bitmap
             BitMapBloques bm = new BitMapBloques(sb.bloques_totales);
 
@@ -63,24 +72,36 @@ public class GestorDisco {
             int bloque_root_datos = 101;
             bm.marcar_ocupado(bloque_root_datos);
 
+            // Crear la lista de bloques asignados
+            List<Integer> bloques_root_asignados = new ArrayList<>();
+            bloques_root_asignados.add(bloque_root_datos);
+
             // Ajustar superbloque
             sb.bloques_libres = sb.bloques_totales - 102; // reservados 0–101
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
 
             // Guardar bitmap actualizado
-            archivo.seek(4 * tam_bloque);
-            archivo.write(bm.serializar());
+            // archivo.seek(4 * tam_bloque);
+            // archivo.write(bm.serializar());
+
+            byte[] datosBM = bm.serializar();
+            BitMapBloques.escribirBitmap(archivo, datosBM);
             System.out.println(
                     "Bitmap inicializado con " + sb.bloques_totales + " bloques, libres: " + sb.bloques_libres);
 
-            // Crear inodo root en bloque 5
-            Inodo root = new Inodo("root", "root", "root", true, bloque_root_datos);
-            archivo.seek(5 * tam_bloque);
-            archivo.write(root.serializar());
+            // Crear inodo root en bloque root.
+            Inodo root = new Inodo("root", "root", "root", true, bloques_root_asignados);
+            archivo.seek(cwd_inodo * tam_bloque);
+            // archivo.write(root.serializar());
+
+            // Modificar para guardar el tamaño esperado tambien.
+            byte[] datosRoot = root.serializar();
+            archivo.writeInt(datosRoot.length);
+            archivo.write(datosRoot);
 
             // Inicializar contenido del root
-            String contenidoRoot = ".;dir;5\n..;dir;5\n";
+            String contenidoRoot = ".;dir;" + cwd_inodo + "\n..;dir;" + cwd_inodo + "\n";
             archivo.seek(bloque_root_datos * tam_bloque);
             archivo.write(contenidoRoot.getBytes(StandardCharsets.UTF_8));
 
@@ -109,13 +130,24 @@ public class GestorDisco {
         }
     }
 
-    public void crear_directorio(String nombre, int inodoPadre) throws IOException {
+    public void crear_directorio(String nombre) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+
+            int inodoPadre = cwd_inodo;
+
+            System.out.println("Mostrando Inodo Padre Pass 1--");
+            debug_dump_inodo(inodoPadre);
             // Leer superbloque
             archivo.seek(2 * tam_bloque);
             byte[] buffer = new byte[tam_bloque];
             archivo.read(buffer);
             SuperBloque sb = SuperBloque.deserializar(buffer);
+
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass1 -- inodoPadre: " +
+            // inodoPadre);
+
+            System.out.println("Mostrando Inodo Padre Pass 2");
+            debug_dump_inodo(inodoPadre);
 
             // Asignar bloque libre para contenido
             int bloque_contenido = asignar_bloque_libre();
@@ -123,16 +155,36 @@ public class GestorDisco {
                 throw new IOException("No hay bloques libres disponibles.");
             sb.bloques_libres--;
 
+            System.out.println("Mostrando Inodo Padre Pass 3--");
+            debug_dump_inodo(inodoPadre);
+
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass2");
+
+            // Crear lista de bloques asignados
+            List<Integer> bloques_asignados = new ArrayList<>();
+            bloques_asignados.add(bloque_contenido);
+
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass3");
+
             // Buscar inodo libre en tabla
             int indice_inodo = buscar_inodo_libre();
             if (indice_inodo < 0)
                 throw new IOException("No hay inodos libres disponibles.");
-            int inodoNuevo = 5 + indice_inodo;
+            int inodoNuevo = 11 + indice_inodo; // Tomar en cuenta del primer Inodo en donde esta root.
 
-            // Crear inodo y escribirlo en tabla
-            Inodo nuevo = new Inodo(nombre, "root", "root", true, bloque_contenido);
+            System.out.println("Mostrando Inodo Padre Pass 4 --");
+            debug_dump_inodo(inodoPadre);
+
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass4");
+
+            // Crear inodo hijo y escribirlo en tabla
+            Inodo nuevo = new Inodo(nombre, "root", "root", true, bloques_asignados);
             archivo.seek(inodoNuevo * tam_bloque);
-            archivo.write(nuevo.serializar());
+            byte[] datosInodo = nuevo.serializar();
+            archivo.writeInt(datosInodo.length); // longitud primero
+            archivo.write(datosInodo); // luego los datos
+
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass5");
 
             // Inicializar contenido del nuevo directorio
             String contenido = ".;dir;" + inodoNuevo + "\n" +
@@ -140,25 +192,51 @@ public class GestorDisco {
             archivo.seek(bloque_contenido * tam_bloque);
             archivo.write(contenido.getBytes(StandardCharsets.UTF_8));
 
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass6");
+
             // Añadir entrada en el directorio padre
-            archivo.seek(inodoPadre * tam_bloque);
-            byte[] bufferPadre = new byte[tam_bloque];
-            archivo.read(bufferPadre);
+            long posicion = inodoPadre * tam_bloque;
+            archivo.seek(posicion);
+
+            // Opcional: inspección de bytes crudos ANTES de leer longitud
+            byte[] raw = new byte[16];
+            archivo.read(raw);
+            // System.out.println("Bytes crudos del inodo padre: " + Arrays.toString(raw));
+
+            // Reposicionar y leer longitud + datos
+            archivo.seek(posicion);
+            int longitud = archivo.readInt();
+            // System.out.println("Longitud del inodo padre: " + longitud);
+
+            byte[] bufferPadre = new byte[longitud];
+            archivo.readFully(bufferPadre);
             Inodo padre = Inodo.deserializar(bufferPadre);
 
-            archivo.seek(padre.bloque_asignado * tam_bloque);
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass7");
+
+            // Usar el primer bloque de datos del padre
+            int bloquePadreDatos = padre.bloques_asignados.get(0);
+
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass8");
+
+            archivo.seek(bloquePadreDatos * tam_bloque);
             byte[] bufferContenidoPadre = new byte[tam_bloque];
             archivo.read(bufferContenidoPadre);
             String contenidoPadre = new String(bufferContenidoPadre, StandardCharsets.UTF_8).trim();
             contenidoPadre += nombre + ";dir;" + inodoNuevo + "\n";
 
-            archivo.seek(padre.bloque_asignado * tam_bloque);
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass9");
+
+            archivo.seek(bloquePadreDatos * tam_bloque);
             archivo.write(contenidoPadre.getBytes(StandardCharsets.UTF_8));
+
+            // System.out.println("Gestor Disco (Crear_Directorio): Pass10");
 
             // Actualizar superbloque
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
 
+            System.out.println("Gestor Disco (Crear_Directorio): Pass11");
             System.out.println("Directorio creado: " + nombre + " (inodo " + inodoNuevo + ")");
         }
     }
@@ -166,43 +244,29 @@ public class GestorDisco {
     public int asignar_bloque_libre() throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             System.out.println("Buscando bloque libre...");
-            // El bitmap esta en el bloque 4
-            archivo.seek(4 * tam_bloque);
 
-            // Leer el tamaño total de bloques primero
-            int total = archivo.readInt();
-            // Calculamos el tamaño esperado: 4 bytes del int + total booleans
-            int longitud = 4 + total;
-            byte[] buffer = new byte[longitud];
-
-            // Ya leímos el primer int, lo incluimos en el buffer manualmente
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream dos = new DataOutputStream(baos);
-            dos.writeInt(total);
-
-            // Leer el resto de los booleanos
-            byte[] resto = new byte[total];
-            archivo.readFully(resto);
-            dos.write(resto);
-
-            buffer = baos.toByteArray();
+            // Leer bitmap desde bloques 4–10
+            byte[] datosBM = BitMapBloques.leerBitmap(archivo);
 
             System.out.println("pass 1");
-            BitMapBloques bm = BitMapBloques.deserializar(buffer);
+            BitMapBloques bm = BitMapBloques.deserializar(datosBM);
             System.out.println("pass 2");
 
+            // Buscar bloque libre
             int bloque_libre = bm.buscar_libre();
             if (bloque_libre == -1) {
                 throw new IOException("No hay bloques libres disponibles.");
             }
             System.out.println("pass 3");
 
+            // Marcarlo como ocupado
             bm.marcar_ocupado(bloque_libre);
             System.out.println("pass 4");
 
-            // Guardar bitmap actualizado
-            archivo.seek(4 * tam_bloque);
-            archivo.write(bm.serializar());
+            // Guardar bitmap actualizado en bloques 4–10
+            byte[] nuevosDatosBM = bm.serializar();
+            BitMapBloques.escribirBitmap(archivo, nuevosDatosBM);
+
             System.out.println("Bloque asignado: " + bloque_libre);
 
             return bloque_libre;
@@ -218,7 +282,7 @@ public class GestorDisco {
             Inodo dirActual = Inodo.deserializar(bufferInodo);
 
             // Leer contenido del bloque asignado
-            archivo.seek(dirActual.bloque_asignado * tam_bloque);
+            archivo.seek(dirActual.bloques_asignados.get(0) * tam_bloque);
             byte[] buffer = new byte[tam_bloque];
             archivo.read(buffer);
 
@@ -252,7 +316,9 @@ public class GestorDisco {
     public int buscar_inodo_libre() throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             for (int i = 0; i < 100; i++) {
-                archivo.seek((5 + i) * tam_bloque);
+
+                archivo.seek((cwd_inodo + i) * tam_bloque); // -> Tomar en cuenta donde empieza el root.
+
                 byte[] buffer = new byte[tam_bloque];
                 archivo.read(buffer);
 
@@ -290,6 +356,40 @@ public class GestorDisco {
                 System.out.println("Bloque " + i + ": " + (bm.get_bloques()[i] ? "Ocupado (1)" : "Libre (0)"));
             }
             System.out.println("====================");
+        }
+    }
+
+    public void debug_dump_inodo(int inodoNumero) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
+            // Leer el inodo
+            long posicion = inodoNumero * tam_bloque;
+            archivo.seek(posicion);
+            int longitud = archivo.readInt();
+            System.out.println("Longitud del inodo: " + longitud);
+            byte[] bufferPadre = new byte[longitud];
+            archivo.readFully(bufferPadre);
+            Inodo inodo = Inodo.deserializar(bufferPadre);
+
+            System.out.println("===== DEBUG DIRECTORIO INODO " + inodoNumero + " =====");
+            System.out.println("Nombre: " + inodo.nombre);
+            System.out.println("Bloques asignados: " + inodo.bloques_asignados);
+            System.out.println("Nombre: " + inodo.nombre);
+            System.out.println("Propietario: " + inodo.propietario);
+            System.out.println("Grupo: " + inodo.grupo);
+            System.out.println("Es directorio: " + inodo.es_directorio);
+            System.out.println("Bloques asignados: " + inodo.bloques_asignados);
+
+            // Mostrar contenido de cada bloque asignado
+            for (int bloque : inodo.bloques_asignados) {
+                archivo.seek(bloque * tam_bloque);
+                byte[] buffer = new byte[tam_bloque];
+                archivo.read(buffer);
+                String contenido = new String(buffer, StandardCharsets.UTF_8).trim();
+                System.out.println("Bloque " + bloque + " contenido:");
+                System.out.println(contenido.isEmpty() ? "(vacío)" : contenido);
+            }
+
+            System.out.println("=====================================");
         }
     }
 
