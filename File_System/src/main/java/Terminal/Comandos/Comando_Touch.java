@@ -22,7 +22,7 @@ public class Comando_Touch implements Comando {
                 // }
             }
 
-            disco.crear_archivo(args[1], "root", "root");
+            disco.crear_archivo(args[1], 1, 1);
 
         } catch (Exception e) {
             System.out.println("Error al crear archivo: " + e.getMessage());

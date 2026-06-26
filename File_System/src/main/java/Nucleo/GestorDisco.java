@@ -92,15 +92,18 @@ public class GestorDisco {
                     "Bitmap inicializado con " + sb.bloques_totales + " bloques, libres: " + sb.bloques_libres);
 
             // Crear inodo root en bloque root.
-            Inodo root = new Inodo("root", "root", "root", true, bloques_root_asignados);
+            // UID = 1, GID = 1, inodo padre = -1 (porque es el root)
+            Inodo root = new Inodo(
+                    cwd_inodo, // numero de inodo (11 en tu caso)
+                    "root", // nombre
+                    1, // propietario (uid)
+                    1, // grupo (gid)
+                    true, // es directorio
+                    bloques_root_asignados, // lista de bloques asignados (ej. [101])
+                    -1, // inodo padre (root no tiene padre)
+                    777 // permisos -> Por defecto demosle todos.
+            );
             Inodo.escribirInodo(archivo, cwd_inodo, root);
-            // archivo.seek(cwd_inodo * tam_bloque);
-            // // archivo.write(root.serializar());
-
-            // // Modificar para guardar el tamaño esperado tambien.
-            // byte[] datosRoot = root.serializar();
-            // archivo.writeInt(datosRoot.length);
-            // archivo.write(datosRoot);
 
             // Inicializar contenido del root
             String contenidoRoot = ".;dir;" + cwd_inodo + "\n..;dir;" + cwd_inodo + "\n";
@@ -145,28 +148,15 @@ public class GestorDisco {
             archivo.read(buffer);
             SuperBloque sb = SuperBloque.deserializar(buffer);
 
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass1 -- inodoPadre: " +
-            // inodoPadre);
-
-            // System.out.println("Mostrando Inodo Padre Pass 2");
-            // debug_dump_inodo(inodoPadre);
-
             // Asignar bloque libre para contenido
             int bloque_contenido = asignar_bloque_libre();
             if (bloque_contenido < 0)
                 throw new IOException("No hay bloques libres disponibles.");
             sb.bloques_libres--;
 
-            // System.out.println("Mostrando Inodo Padre Pass 3--");
-            // debug_dump_inodo(inodoPadre);
-
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass2");
-
             // Crear lista de bloques asignados
             List<Integer> bloques_asignados = new ArrayList<>();
             bloques_asignados.add(bloque_contenido);
-
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass3");
 
             // Buscar inodo libre en tabla
             int indice_inodo = buscar_inodo_libre();
@@ -174,20 +164,20 @@ public class GestorDisco {
                 throw new IOException("No hay inodos libres disponibles.");
             int inodoNuevo = 11 + indice_inodo; // Tomar en cuenta del primer Inodo en donde esta root.
 
-            // System.out.println("Mostrando Inodo Padre Pass 4 --");
-            // debug_dump_inodo(inodoPadre);
-
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass4");
-
             // Crear inodo hijo y escribirlo en tabla
-            Inodo nuevo = new Inodo(nombre, "root", "root", true, bloques_asignados);
-            Inodo.escribirInodo(archivo, inodoNuevo, nuevo);
-            // archivo.seek(inodoNuevo * tam_bloque);
-            // byte[] datosInodo = nuevo.serializar();
-            // archivo.writeInt(datosInodo.length); // longitud primero
-            // archivo.write(datosInodo); // luego los datos
+            // Inodo nuevo = new Inodo(nombre, "root", "root", true, bloques_asignados);
+            Inodo nuevo = new Inodo(
+                    inodoNuevo, // numero de inodo
+                    nombre, // nombre del directorio
+                    1, // propietario (uid root = 1)
+                    1, // grupo (gid root = 1)
+                    true, // es directorio
+                    bloques_asignados, // bloques asignados
+                    inodoPadre, // inodo padre
+                    777 // permisos
+            );
 
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass5");
+            Inodo.escribirInodo(archivo, inodoNuevo, nuevo);
 
             // Inicializar contenido del nuevo directorio
             String contenido = ".;dir;" + inodoNuevo + "\n" +
@@ -195,37 +185,13 @@ public class GestorDisco {
             archivo.seek(bloque_contenido * tam_bloque);
             archivo.write(contenido.getBytes(StandardCharsets.UTF_8));
 
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass6");
-
-            // Añadir entrada en el directorio padre
-            // long posicion = inodoPadre * tam_bloque;
-            // archivo.seek(posicion);
-
-            // // Opcional: inspección de bytes crudos ANTES de leer longitud
-            // byte[] raw = new byte[16];
-            // archivo.read(raw);
-            // // System.out.println("Bytes crudos del inodo padre: " +
-            // Arrays.toString(raw));
-
-            // // Reposicionar y leer longitud + datos
-            // archivo.seek(posicion);
-            // int longitud = archivo.readInt();
-            // // System.out.println("Longitud del inodo padre: " + longitud);
-
-            // byte[] bufferPadre = new byte[longitud];
-            // archivo.readFully(bufferPadre);
-            // Inodo padre = Inodo.deserializar(bufferPadre);
             Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
             if (padre.bloques_asignados == null || padre.bloques_asignados.isEmpty()) {
                 throw new IOException("El inodo padre no tiene bloques asignados.");
             }
 
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass7");
-
             // Usar el primer bloque de datos del padre
             int bloquePadreDatos = padre.bloques_asignados.get(0);
-
-            // System.out.println("Gestor Disco (Crear_Directorio): Pass8");
 
             archivo.seek(bloquePadreDatos * tam_bloque);
             byte[] bufferContenidoPadre = new byte[tam_bloque];
@@ -250,7 +216,7 @@ public class GestorDisco {
         }
     }
 
-    public void crear_archivo(String nombre, String usuarioActual, String grupoActual)
+    public void crear_archivo(String nombre, int usuarioActual, int grupoActual)
             throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
@@ -279,7 +245,18 @@ public class GestorDisco {
             int inodoNuevo = 11 + indice_inodo;
 
             // Crear inodo de archivo
-            Inodo nuevo = new Inodo(nombre, usuarioActual, grupoActual, false, bloques_asignados);
+            // Inodo nuevo = new Inodo(nombre, usuarioActual, grupoActual, false,
+            // bloques_asignados);
+            Inodo nuevo = new Inodo(
+                    inodoNuevo, // numero de inodo
+                    nombre, // nombre del archivo
+                    usuarioActual, // propietario (uid)
+                    grupoActual, // grupo (gid)
+                    false, // es_directorio = false
+                    bloques_asignados, // bloques asignados
+                    inodoPadre, // inodo padre
+                    777 // permisos
+            );
             Inodo.escribirInodo(archivo, inodoNuevo, nuevo);
 
             // Inicializar bloque de datos vacío
