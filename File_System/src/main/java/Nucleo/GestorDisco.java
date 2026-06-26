@@ -35,6 +35,18 @@ public class GestorDisco {
         this.cwd_inodo = cwd_inodo;
     }
 
+    public void set_ruta(String ruta) {
+        this.ruta = ruta;
+    }
+
+    public String get_ruta() {
+        return ruta;
+    }
+
+    public int get_tam_bloque() {
+        return tam_bloque;
+    }
+
     public void formatear_disco(int tam_mb) throws IOException {
         int tam_bytes = tam_mb * 1024 * 1024;
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
@@ -279,6 +291,93 @@ public class GestorDisco {
             archivo.write(sb.serializar());
 
             System.out.println("Archivo creado: " + nombre + " (inodo " + inodoNuevo + ")");
+        }
+    }
+
+    public void escribir_archivo(String nombreArchivo, String contenido) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+
+            int inodoPadre = getCwdInodo();
+
+            // Buscar el inodo del archivo dentro del directorio actual
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+            int bloquePadreDatos = padre.bloques_asignados.get(0);
+            String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadreDatos, tam_bloque);
+
+            // Buscar entrada del archivo
+            int inodoArchivo = -1;
+            String[] entradas = contenidoPadre.split("\n");
+            for (String entrada : entradas) {
+                if (!entrada.isBlank()) {
+                    String[] partes = entrada.split(";");
+                    if (partes.length >= 3 && partes[0].equals(nombreArchivo) && partes[1].equals("file")) {
+                        inodoArchivo = Integer.parseInt(partes[2]);
+                        break;
+                    }
+                }
+            }
+            if (inodoArchivo == -1) {
+                throw new IOException("Archivo no encontrado en el directorio actual: " + nombreArchivo);
+            }
+
+            // Leer inodo del archivo
+            Inodo archivoInodo = Inodo.leerInodo(archivo, inodoArchivo);
+
+            // Escribir contenido en el primer bloque asignado
+            int bloqueDatos = archivoInodo.bloques_asignados.get(0);
+            manipular_contenido_bloques.escribirBloque(archivo, bloqueDatos, contenido, tam_bloque);
+
+            // Actualizar metadatos del inodo
+            archivoInodo.tamano_utilizado = contenido.getBytes(StandardCharsets.UTF_8).length;
+            archivoInodo.fecha_modificacion = System.currentTimeMillis();
+            archivoInodo.fecha_acceso = System.currentTimeMillis();
+
+            // Guardar inodo actualizado
+            Inodo.escribirInodo(archivo, inodoArchivo, archivoInodo);
+
+            System.out.println("Contenido escrito en archivo: " + nombreArchivo);
+        }
+    }
+
+    public String leer_archivo(String nombreArchivo) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+
+            int inodoPadre = getCwdInodo();
+
+            // Buscar el inodo del archivo dentro del directorio actual
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+            int bloquePadreDatos = padre.bloques_asignados.get(0);
+            String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadreDatos, tam_bloque);
+
+            // Buscar entrada del archivo
+            int inodoArchivo = -1;
+            String[] entradas = contenidoPadre.split("\n");
+            for (String entrada : entradas) {
+                if (!entrada.isBlank()) {
+                    String[] partes = entrada.split(";");
+                    if (partes.length >= 3 && partes[0].equals(nombreArchivo) && partes[1].equals("file")) {
+                        inodoArchivo = Integer.parseInt(partes[2]);
+                        break;
+                    }
+                }
+            }
+            if (inodoArchivo == -1) {
+                throw new IOException("Archivo no encontrado en el directorio actual: " + nombreArchivo);
+            }
+
+            // Leer inodo del archivo
+            Inodo archivoInodo = Inodo.leerInodo(archivo, inodoArchivo);
+
+            // Leer contenido del primer bloque asignado
+            int bloqueDatos = archivoInodo.bloques_asignados.get(0);
+            String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
+
+            // Actualizar fecha de acceso
+            archivoInodo.fecha_acceso = System.currentTimeMillis();
+            Inodo.escribirInodo(archivo, inodoArchivo, archivoInodo);
+
+            System.out.println("Contenido leído de archivo: " + nombreArchivo);
+            return contenido.trim();
         }
     }
 

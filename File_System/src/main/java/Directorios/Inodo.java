@@ -255,6 +255,35 @@ public class Inodo {
         escribirInodo(archivo, inodoNum, inodo);
     }
 
+    // Actualizar nombre del archivo/directorio
+    public static void actualizarNombre(RandomAccessFile archivo, int inodoNum, String nuevoNombre) throws IOException {
+        Inodo inodo = leerInodo(archivo, inodoNum);
+        inodo.nombre = nuevoNombre;
+        escribirInodo(archivo, inodoNum, inodo);
+    }
+
+    // Actualizar lista completa de bloques asignados
+    public static void actualizarBloquesAsignados(RandomAccessFile archivo, int inodoNum, List<Integer> nuevosBloques)
+            throws IOException {
+        Inodo inodo = leerInodo(archivo, inodoNum);
+        inodo.bloques_asignados = new ArrayList<>(nuevosBloques);
+        escribirInodo(archivo, inodoNum, inodo);
+    }
+
+    // Agregar un bloque adicional al inodo
+    public static void agregarBloque(RandomAccessFile archivo, int inodoNum, int bloque) throws IOException {
+        Inodo inodo = leerInodo(archivo, inodoNum);
+        inodo.bloques_asignados.add(bloque);
+        escribirInodo(archivo, inodoNum, inodo);
+    }
+
+    // Eliminar un bloque especifico del inodo
+    public static void eliminarBloque(RandomAccessFile archivo, int inodoNum, int bloque) throws IOException {
+        Inodo inodo = leerInodo(archivo, inodoNum);
+        inodo.bloques_asignados.remove(Integer.valueOf(bloque));
+        escribirInodo(archivo, inodoNum, inodo);
+    }
+
     public void mostrarInodo() {
         System.out.println("===== DEBUG INODO " + numero + " =====");
         System.out.println("Nombre: " + nombre);

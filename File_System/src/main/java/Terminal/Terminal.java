@@ -51,6 +51,21 @@ public class Terminal {
                     cmdTouch.ejecutar(partes);
                     break;
 
+                case "cat":
+                    Comando_Cat cmdCat = new Comando_Cat();
+                    cmdCat.ejecutar(partes);
+                    break;
+
+                case "less":
+                    Comando_Less cmdLess = new Comando_Less();
+                    cmdLess.ejecutar(partes);
+                    break;
+
+                case "note":
+                    Comando_Note cmdNote = new Comando_Note();
+                    cmdNote.ejecutar(partes);
+                    break;
+
                 default:
                     System.out.println("Comando no reconocido: " + comando);
             }
