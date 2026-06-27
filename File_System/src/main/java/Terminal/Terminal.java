@@ -14,6 +14,18 @@ public class Terminal {
         Scanner sc = new Scanner(System.in);
 
         while (true) {
+
+            // Primero se tiene que ver si ingreso el disco a usar.
+            // Si se ingreso, intentamos usar ese.
+
+            // Si no se ingreso, empezamos el formateo del disco de una vez.
+
+            // Lo primero es buscar al ultimo usuario activo.
+
+            // Despues intentamos se aplica el inicio de sesion para ese usuario.
+
+            // Si es exitoso entonces podemos continiar.
+
             System.out.print(usuario_actual + "@miFS: ");
             String linea = sc.nextLine().trim();
             String[] partes = linea.split(" ");
@@ -64,6 +76,21 @@ public class Terminal {
                 case "note":
                     Comando_Note cmdNote = new Comando_Note();
                     cmdNote.ejecutar(partes);
+                    break;
+
+                case "useradd":
+                    Comando_Useradd cmdUseradd = new Comando_Useradd();
+                    cmdUseradd.ejecutar(partes);
+                    break;
+
+                case "groupadd":
+                    Comando_Groupadd cmdGroupadd = new Comando_Groupadd();
+                    cmdGroupadd.ejecutar(partes);
+                    break;
+
+                case "usermod":
+                    Comando_Usermod cmdUsermod = new Comando_Usermod();
+                    cmdUsermod.ejecutar(partes);
                     break;
 
                 default:

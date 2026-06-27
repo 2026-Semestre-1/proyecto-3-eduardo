@@ -28,7 +28,8 @@ public class GestorUsuarios {
     }
 
     // Crear usuario
-    public int crear_usuario(RandomAccessFile archivo, int gid, String nombre, String contrasena,
+    public int crear_usuario(RandomAccessFile archivo, int gid, String nombre_completo, String nombre,
+            String contrasena,
             boolean privilegiado, boolean activo) throws IOException {
         // Verificar que no exista
         for (Usuario u : usuarios) {
@@ -38,7 +39,7 @@ public class GestorUsuarios {
         }
 
         int nuevo_uid = obtener_siguiente_uid();
-        Usuario nuevo = new Usuario(nuevo_uid, gid, nombre, contrasena, privilegiado, activo);
+        Usuario nuevo = new Usuario(nuevo_uid, gid, nombre_completo, nombre, contrasena, privilegiado, activo);
         usuarios.add(nuevo);
 
         // Guardar lista en bloques reservados
@@ -91,10 +92,28 @@ public class GestorUsuarios {
         ois.close();
     }
 
+    public boolean iniciar_sesion(String nombre, String contrasena) {
+        Usuario usuario = buscar_usuario(nombre);
+        if (usuario == null) {
+            return false;
+        }
+        return usuario.getContrasena().equals(contrasena);
+    }
+
     // Buscar usuario por nombre
     public Usuario buscar_usuario(String nombre) {
         for (Usuario u : usuarios) {
             if (u.getNombre().equals(nombre)) {
+                return u;
+            }
+        }
+        return null;
+    }
+
+    // Buscar usuario por UID
+    public Usuario buscar_usuario_por_uid(int uid) {
+        for (Usuario u : usuarios) {
+            if (u.getUid() == uid) {
                 return u;
             }
         }
@@ -121,15 +140,22 @@ public class GestorUsuarios {
         return max_uid + 1;
     }
 
-    // Obtener el siguiente GID disponible
-    // private int obtener_siguiente_gid() {
-    // int max_gid = 0;
-    // for (Usuario u : usuarios) {
-    // if (u.getGid() > max_gid) {
-    // max_gid = u.getGid();
-    // }
-    // }
-    // return max_gid + 1;
-    // }
+    public void agregar_grupo_secundario(RandomAccessFile archivo, int uid, int gid) throws IOException {
+        Usuario u = buscar_usuario_por_uid(uid);
+        if (u == null) {
+            throw new IOException("El usuario no existe: " + uid);
+        }
+        u.agregar_grupo_secundario(gid);
+        guardar_usuarios(archivo);
+    }
+
+    public void eliminar_grupo_secundario(RandomAccessFile archivo, int uid, int gid) throws IOException {
+        Usuario u = buscar_usuario_por_uid(uid);
+        if (u == null) {
+            throw new IOException("El usuario no existe: " + uid);
+        }
+        u.eliminar_grupo_secundario(gid);
+        guardar_usuarios(archivo);
+    }
 
 }

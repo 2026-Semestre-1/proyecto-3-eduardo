@@ -50,6 +50,10 @@ public class GestorGrupos {
         return max_gid + 1;
     }
 
+    public void guardar_grupos_2(RandomAccessFile archivo) throws IOException {
+        guardar_grupos(archivo);
+    }
+
     // Guardar lista de grupos en bloque reservado
     private void guardar_grupos(RandomAccessFile archivo) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -91,20 +95,41 @@ public class GestorGrupos {
     }
 
     // Agregar usuario a grupo
-    public void agregar_usuario_a_grupo(String nombre_grupo, int uid) throws IOException {
-        Grupo g = buscar_grupo(nombre_grupo);
+    public void agregar_usuario_a_grupo(int gid, int uid) throws IOException {
+        Grupo g = buscar_grupo_por_gid(gid);
         if (g == null) {
-            throw new IOException("Grupo no encontrado: " + nombre_grupo);
+            throw new IOException("Grupo no encontrado: " + gid);
         }
         g.agregar_miembro(uid);
     }
 
     // Eliminar usuario de grupo
-    public void eliminar_usuario_de_grupo(String nombre_grupo, int uid) throws IOException {
-        Grupo g = buscar_grupo(nombre_grupo);
+    public void eliminar_usuario_de_grupo(int gid, int uid) throws IOException {
+        Grupo g = buscar_grupo_por_gid(gid);
         if (g == null) {
-            throw new IOException("Grupo no encontrado: " + nombre_grupo);
+            throw new IOException("Grupo no encontrado: " + gid);
         }
         g.eliminar_miembro(uid);
+    }
+
+    // Buscar grupo por GID
+    public Grupo buscar_grupo_por_gid(int gid) {
+        for (Grupo g : lista_grupos) {
+            if (g.get_gid() == gid) {
+                return g;
+            }
+        }
+        return null;
+    }
+
+    // Obtener todos los grupos a los que pertenece un usuario
+    public List<Grupo> get_grupos_de_usuario(int uid) {
+        List<Grupo> grupos = new ArrayList<>();
+        for (Grupo g : lista_grupos) {
+            if (g.get_miembros().contains(uid)) {
+                grupos.add(g);
+            }
+        }
+        return grupos;
     }
 }

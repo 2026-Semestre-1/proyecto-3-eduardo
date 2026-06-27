@@ -138,13 +138,24 @@ public class GestorDisco {
 
             // registrar los datos.
             int gid_root = grupos.crear_grupo(archivo, "root");
-            int uid_root = usuarios.crear_usuario(archivo, gid_root, "root", nombre_contrasena_root, true, true);
+            int uid_root = usuarios.crear_usuario(archivo, gid_root, "root", "root", nombre_contrasena_root, true,
+                    true);
 
             // Seteamos el usuario actual.
             set_usuario_actual(usuarios.buscar_usuario("root"));
 
             // Asignar el usuario root al grupo.
-            grupos.agregar_usuario_a_grupo("root", uid_root);
+            grupos.agregar_usuario_a_grupo(1, uid_root);
+
+            // Aspectos adicionales >>>> Esto queda pendiente. TODO: Aspectos adicionales.
+
+            // Crear la carpeta user/
+
+            // Moverse a la carpeta user.
+
+            // Crear la carpeta del usuario "root".
+
+            // Moverse a la carpeta "root".
 
             // Crear la carpeta home del usuario root.
             crear_directorio("Home");
