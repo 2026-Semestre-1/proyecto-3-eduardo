@@ -93,6 +93,11 @@ public class Terminal {
                     cmdUsermod.ejecutar(partes);
                     break;
 
+                case "cd":
+                    Comando_Cd cmdCd = new Comando_Cd();
+                    cmdCd.ejecutar(partes);
+                    break;
+
                 default:
                     System.out.println("Comando no reconocido: " + comando);
             }

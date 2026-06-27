@@ -22,9 +22,16 @@ public class GestorDisco {
     private String ruta;
     private final int tam_bloque = 4096; // fijo interno
 
-    private static int cwd_inodo = 16; // Inoddo del directorio actual, por defecto apunta al root.
+    private static int cwd_inodo = 20; // Inoddo del directorio actual, por defecto apunta al root.
 
-    private int inodo_base = 16;
+    private int inodo_base = 20;// 16
+
+    // Seccion reservada para la gestion.
+
+    // >> Total de bloques que se reservar para la gestion del programa.
+    private static int cant_bloques_gestion = 200;
+
+    private static int cant_inodos_gestion = 181;
 
     private static Usuario usuario_actual;
 
@@ -83,55 +90,68 @@ public class GestorDisco {
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
 
+            // Ajustar superbloque
+            sb.bloques_libres = sb.bloques_totales - (cant_bloques_gestion + 1); // reservados 0–101
+            archivo.seek(2 * tam_bloque);
+            archivo.write(sb.serializar());
+
             // Inicializar bitmap
             BitMapBloques bm = new BitMapBloques(sb.bloques_totales);
 
             // Reservar bloques de gestión (0–100)
-            for (int i = 0; i <= 100; i++) {
+            for (int i = 0; i <= cant_bloques_gestion; i++) {
                 bm.marcar_ocupado(i);
             }
 
+            byte[] datosBM2 = bm.serializar();
+            BitMapBloques.escribirBitmap(archivo, datosBM2);
+
+            // Generar la tabla de inodos inicial
+            BitMapInodos bm_inodos = new BitMapInodos(cant_inodos_gestion);
+            byte[] datosBMInodos = bm_inodos.serializar();
+            BitMapInodos.escribir_bitmap(archivo, datosBMInodos);
+
             // Asignar bloque de datos 101 al root
-            int bloque_root_datos = 101;
-            bm.marcar_ocupado(bloque_root_datos);
+            // int bloque_root_datos = asignar_bloque_libre();// 101; // Buscar un bloque
+            // libre.cant_bloques_gestion + 1
+            // bm.marcar_ocupado(bloque_root_datos);
 
-            // Crear la lista de bloques asignados
-            List<Integer> bloques_root_asignados = new ArrayList<>();
-            bloques_root_asignados.add(bloque_root_datos);
+            // // Crear la lista de bloques asignados
+            // List<Integer> bloques_root_asignados = new ArrayList<>();
+            // bloques_root_asignados.add(bloque_root_datos);
 
-            // Ajustar superbloque
-            sb.bloques_libres = sb.bloques_totales - 102; // reservados 0–101
-            archivo.seek(2 * tam_bloque);
-            archivo.write(sb.serializar());
+            // byte[] datosBM = bm.serializar();
+            // BitMapBloques.escribirBitmap(archivo, datosBM);
+            // System.out.println(
+            // "Bitmap inicializado con " + sb.bloques_totales + " bloques, libres: " +
+            // sb.bloques_libres);
 
-            // Guardar bitmap actualizado
-            // archivo.seek(4 * tam_bloque);
-            // archivo.write(bm.serializar());
+            // // Asignar un inodo libre.
+            // int inodo_root_libre = asignar_inodo_libre();
+            // // Crear inodo root en bloque root.
+            // int numero_inodo_root = inodo_base + inodo_root_libre;
+            // Inodo root = new Inodo(
+            // numero_inodo_root,
+            // "root", // nombre
+            // 1, // propietario (uid)
+            // 1, // grupo (gid)
+            // true, // es directorio
+            // bloques_root_asignados, // lista de bloques asignados (ej. [101])
+            // -1, // inodo padre (root no tiene padre)
+            // 77 // permisos -> Por defecto demosle todos.
+            // );
+            // Inodo.escribirInodo(archivo, numero_inodo_root, root);
 
-            byte[] datosBM = bm.serializar();
-            BitMapBloques.escribirBitmap(archivo, datosBM);
-            System.out.println(
-                    "Bitmap inicializado con " + sb.bloques_totales + " bloques, libres: " + sb.bloques_libres);
+            // // Inicializar contenido del root
+            // String contenidoRoot = ".;dir;" + numero_inodo_root + "\n..;dir;" +
+            // numero_inodo_root + "\n";
+            // archivo.seek(bloque_root_datos * tam_bloque);
+            // archivo.write(contenidoRoot.getBytes(StandardCharsets.UTF_8));
 
-            // Crear inodo root en bloque root.
-            // UID = 1, GID = 1, inodo padre = -1 (porque es el root)
-            Inodo root = new Inodo(
-                    cwd_inodo, // numero de inodo (11 en tu caso)
-                    "root", // nombre
-                    1, // propietario (uid)
-                    1, // grupo (gid)
-                    true, // es directorio
-                    bloques_root_asignados, // lista de bloques asignados (ej. [101])
-                    -1, // inodo padre (root no tiene padre)
-                    777 // permisos -> Por defecto demosle todos.
-            );
-            Inodo.escribirInodo(archivo, cwd_inodo, root);
+            // Posicionarnos en en ese Inodo root.
+            cwd_inodo = inodo_base + 1;
 
-            // Inicializar contenido del root
-            String contenidoRoot = ".;dir;" + cwd_inodo + "\n..;dir;" + cwd_inodo + "\n";
-            archivo.seek(bloque_root_datos * tam_bloque);
-            archivo.write(contenidoRoot.getBytes(StandardCharsets.UTF_8));
-
+            // ##### Seccion para el registro del usuario root.
             // Crear usuario root
             GestorUsuarios usuarios = new GestorUsuarios();
             GestorGrupos grupos = new GestorGrupos();
@@ -147,23 +167,123 @@ public class GestorDisco {
             // Asignar el usuario root al grupo.
             grupos.agregar_usuario_a_grupo(1, uid_root);
 
-            // Aspectos adicionales >>>> Esto queda pendiente. TODO: Aspectos adicionales.
-
             // Crear la carpeta user/
-
-            // Moverse a la carpeta user.
+            crear_carpeta_users(archivo);
 
             // Crear la carpeta del usuario "root".
+            crear_carpeta_usuario(archivo, usuario_actual);
 
             // Moverse a la carpeta "root".
 
             // Crear la carpeta home del usuario root.
-            crear_directorio("Home");
+            // crear_directorio("Home");
 
             System.out.println("Usuario creado: " + usuarios.buscar_usuario("root"));
             System.out.println("Grupo creado: " + grupos.buscar_grupo("root"));
 
         }
+    }
+
+    public void crear_carpeta_users(RandomAccessFile archivo) throws IOException {
+        // Obtener inodo padre (root)
+        int inodo_padre = inodo_base;
+
+        System.out.println("GestorDisco (crear_carpeta_users):");
+
+        // Asignar bloque de datos
+        int bloque_datos = asignar_bloque_libre();
+        List<Integer> bloques_asignados = new ArrayList<>();
+        bloques_asignados.add(bloque_datos);
+
+        // Asignar inodo libre
+        int indice_inodo = asignar_inodo_libre();
+        int numero_inodo = inodo_base + indice_inodo;
+
+        // Crear inodo users
+        Inodo users = new Inodo(
+                numero_inodo,
+                "users",
+                1, 1,
+                true,
+                bloques_asignados,
+                inodo_padre,
+                77);
+        Inodo.escribirInodo(archivo, numero_inodo, users);
+
+        // Inicializar bloque de datos
+        String contenido = ".;dir;" + numero_inodo + "\n..;dir;" + inodo_padre + "\n";
+        manipular_contenido_bloques.escribirBloque(archivo, bloque_datos, contenido, tam_bloque);
+
+        // Actualizar directorio padre (root)
+        // Actualizar directorio padre
+        Inodo padre = Inodo.leerInodo(archivo, inodo_padre);
+        int bloquePadre = padre.bloques_asignados.get(0);
+        String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadre, tam_bloque);
+
+        // Asegurar salto de línea
+        if (!contenidoPadre.endsWith("\n")) {
+            contenidoPadre += "\n";
+        }
+
+        // Agregar nueva entrada
+        contenidoPadre += "users" + ";dir;" + numero_inodo + "\n";
+
+        // Escribir de nuevo
+        manipular_contenido_bloques.escribirBloque(archivo, bloquePadre, contenidoPadre, tam_bloque);
+
+        System.out.println("Carpeta 'users/' creada en inodo " + numero_inodo);
+    }
+
+    public void crear_carpeta_usuario(RandomAccessFile archivo, Usuario usuario) throws IOException {
+        // Padre es la carpeta users
+        int inodo_padre = inodo_base;
+
+        // Asignar bloque de datos
+        int bloque_datos = asignar_bloque_libre();
+        List<Integer> bloques_asignados = new ArrayList<>();
+        bloques_asignados.add(bloque_datos);
+
+        // Asignar inodo libre
+        int indice_inodo = asignar_inodo_libre();
+        int numero_inodo = inodo_base + indice_inodo;
+
+        // Crear inodo usuario
+        Inodo carpeta_usuario = new Inodo(
+                numero_inodo,
+                usuario.getNombre(),
+                usuario.getUid(),
+                usuario.getGid(),
+                true,
+                bloques_asignados,
+                inodo_padre,
+                700);
+        Inodo.escribirInodo(archivo, numero_inodo, carpeta_usuario);
+
+        // Inicializar bloque de datos
+        String contenido = ".;dir;" + numero_inodo + "\n..;dir;" + inodo_padre + "\n";
+        manipular_contenido_bloques.escribirBloque(archivo, bloque_datos, contenido, tam_bloque);
+
+        // Actualizar carpeta users
+        // Actualizar directorio padre
+        Inodo padre = Inodo.leerInodo(archivo, inodo_padre);
+        int bloquePadre = padre.bloques_asignados.get(0);
+        String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadre, tam_bloque);
+
+        // Asegurar salto de línea
+        if (!contenidoPadre.endsWith("\n")) {
+            contenidoPadre += "\n";
+        }
+
+        // Agregar nueva entrada
+        contenidoPadre += usuario.getNombre() + ";dir;" + numero_inodo + "\n";
+
+        // Escribir de nuevo
+        manipular_contenido_bloques.escribirBloque(archivo, bloquePadre, contenidoPadre, tam_bloque);
+
+        System.out.println("Carpeta del usuario '" + usuario.getNombre() + "' creada en inodo " + numero_inodo);
+
+        // Crear carpeta Home dentro del usuario
+        crear_directorio("Home");
     }
 
     public void mostrar_info() {
@@ -209,7 +329,7 @@ public class GestorDisco {
             bloques_asignados.add(bloque_contenido);
 
             // Buscar inodo libre en tabla
-            int indice_inodo = buscar_inodo_libre();
+            int indice_inodo = asignar_inodo_libre();
             if (indice_inodo < 0)
                 throw new IOException("No hay inodos libres disponibles.");
             int inodoNuevo = inodo_base + indice_inodo; // Tomar en cuenta del primer Inodo en donde esta root.
@@ -289,7 +409,7 @@ public class GestorDisco {
             bloques_asignados.add(bloque_contenido);
 
             // Buscar inodo libre
-            int indice_inodo = buscar_inodo_libre();
+            int indice_inodo = asignar_inodo_libre();
             if (indice_inodo < 0)
                 throw new IOException("No hay inodos libres disponibles.");
             int inodoNuevo = inodo_base + indice_inodo;
@@ -426,20 +546,20 @@ public class GestorDisco {
             // Leer bitmap desde bloques 4–10
             byte[] datosBM = BitMapBloques.leerBitmap(archivo);
 
-            System.out.println("pass 1");
+            // System.out.println("pass 1");
             BitMapBloques bm = BitMapBloques.deserializar(datosBM);
-            System.out.println("pass 2");
+            // System.out.println("pass 2");
 
             // Buscar bloque libre
             int bloque_libre = bm.buscar_libre();
             if (bloque_libre == -1) {
                 throw new IOException("No hay bloques libres disponibles.");
             }
-            System.out.println("pass 3");
+            // System.out.println("pass 3");
 
             // Marcarlo como ocupado
             bm.marcar_ocupado(bloque_libre);
-            System.out.println("pass 4");
+            // System.out.println("pass 4");
 
             // Guardar bitmap actualizado en bloques 4–10
             byte[] nuevosDatosBM = bm.serializar();
@@ -460,7 +580,8 @@ public class GestorDisco {
             // Obtener inodo del directorio actual con función centralizada
             Inodo dirActual = Inodo.leerInodo(archivo, inodoActual);
 
-            System.out.println("===== LISTANDO DIRECTORIO INODO " + inodoActual + " =====");
+            System.out.println("===== LISTANDO DIRECTORIO INODO " + inodoActual + " Nombre directorio"
+                    + dirActual.nombre + " =====");
 
             if (dirActual.bloques_asignados == null || dirActual.bloques_asignados.isEmpty()) {
                 System.out.println("Directorio vacío (sin bloques asignados).");
@@ -512,27 +633,83 @@ public class GestorDisco {
         }
     }
 
-    public int buscar_inodo_libre() throws IOException {
-        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
-            for (int i = 0; i < 100; i++) {
+    /**
+     * Nombre: navegacion_directorios
+     * 
+     * Descripcion: Cambia el directorio actual al directorio especificado por el
+     * path.
+     * 
+     * @param path El path del directorio al que se desea cambiar.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
+    public void navegacion_directorios(String path) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
 
-                archivo.seek((cwd_inodo + i) * tam_bloque); // -> Tomar en cuenta donde empieza el root.
+            Inodo actual = Inodo.leerInodo(archivo, cwd_inodo);
 
-                byte[] buffer = new byte[tam_bloque];
-                archivo.read(buffer);
+            if (path.equals("..")) {
+                // Retroceder al padre
+                if (cwd_inodo == inodo_base) {
+                    System.out.println("Ya estás en el directorio raíz, no puedes retroceder más.");
+                    return;
+                }
+                cwd_inodo = actual.inodo_padre;
+                System.out.println("Directorio cambiado a inodo " + actual.inodo_padre);
+                return;
+            }
 
-                boolean vacio = true;
-                for (byte b : buffer) {
-                    if (b != 0) {
-                        vacio = false;
+            // Buscar subdirectorio dentro del directorio actual
+            int bloqueDatos = actual.bloques_asignados.get(0);
+            String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, get_tam_bloque());
+
+            int nuevoInodo = -1;
+            for (String entrada : contenido.split("\n")) {
+                if (!entrada.isBlank()) {
+                    String[] partes = entrada.split(";");
+                    if (partes.length >= 3 && partes[0].equals(path) && partes[1].equals("dir")) {
+                        nuevoInodo = Integer.parseInt(partes[2]);
                         break;
                     }
                 }
-                if (vacio)
-                    return i; // bloque de inodo libre
             }
+
+            if (nuevoInodo == -1) {
+                System.out.println("Directorio no encontrado: " + path);
+                return;
+            }
+
+            cwd_inodo = nuevoInodo;
+            System.out.println("Directorio cambiado a " + path + " (inodo " + nuevoInodo + ")");
         }
-        return -1;
+    }
+
+    /**
+     * 
+     * @return El inodo que esta libre el la tabla de inodos, pero lo que devuelve
+     *         es el indice de la tabla, se debe de operar con el inodo base para
+     *         obtener el numero real del inodo.
+     * @throws IOException Si no se encuentra el inodo o algun error de acceso.
+     */
+    public int asignar_inodo_libre() throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            // Leer bitmap de inodos desde los bloques reservados (14–15)
+            byte[] datosBM = BitMapInodos.leer_bitmap(archivo);
+            BitMapInodos bm = BitMapInodos.deserializar(datosBM);
+
+            // Buscar índice libre
+            int indice = bm.buscar_libre();
+            if (indice == -1) {
+                return -1; // no hay inodos libres
+            }
+
+            // Marcar como ocupado
+            bm.marcar_ocupado(indice);
+
+            // Guardar bitmap actualizado en disco
+            BitMapInodos.escribir_bitmap(archivo, bm.serializar());
+
+            return indice; // índice dentro de la tabla de inodos
+        }
     }
 
     public void debug_dump_bitmap(int cantidad) throws IOException {
@@ -577,6 +754,15 @@ public class GestorDisco {
             System.out.println("Grupo: " + inodo.grupo);
             System.out.println("Es directorio: " + inodo.es_directorio);
             System.out.println("Bloques asignados: " + inodo.bloques_asignados);
+            System.out.println("Fecha de creacion: " + inodo.fecha_creacion);
+            System.out.println("Fecha de modificacion: " + inodo.fecha_modificacion);
+            System.out.println("Fecha de acceso: " + inodo.fecha_acceso);
+            System.out.println("Tamano: " + inodo.tamano_utilizado);
+            System.out.println("Grupo: " + inodo.grupo);
+            System.out.println("Permisos: " + inodo.permisos);
+            System.out.println("Es directorio: " + inodo.es_directorio);
+            System.out.println("Bloques asignados: " + inodo.bloques_asignados);
+            System.out.println("Inodo Padre: " + inodo.inodo_padre);
 
             // Mostrar contenido de cada bloque asignado
             for (int bloque : inodo.bloques_asignados) {
