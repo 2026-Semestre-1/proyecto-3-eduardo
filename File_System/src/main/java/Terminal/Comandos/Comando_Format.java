@@ -24,11 +24,15 @@ public class Comando_Format implements Comando {
                 archivo.delete();
             }
 
+            // Solicitar el ingreso de la contraseña del usuario root.
+            System.out.println("Ingrese la contraseña del usuario root:");
+            String contrasena_root = sc.next();
+
             GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
-            disco.formatear_disco(tam_mb);
+            disco.formatear_disco(tam_mb, contrasena_root);
 
             // Print de DEBUG.
-            GestorDisco disco2 = new GestorDisco("miDiscoDuro.fs");
+            // GestorDisco disco2 = new GestorDisco("miDiscoDuro.fs");
             // disco2.debug_dump_inodo(5);
             System.out.println("Disco formateado con éxito. Usuario root creado.");
             // sc.close();

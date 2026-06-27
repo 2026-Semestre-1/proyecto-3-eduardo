@@ -11,7 +11,9 @@ import java.io.File;
 import java.io.IOException;
 import Nucleo.MasterBootRecorder.MBR;
 import Nucleo.MasterBootRecorder.ParticionBoot;
+import Usuarios.GestorGrupos;
 import Usuarios.GestorUsuarios;
+import Usuarios.Usuario;
 import Utils.manipular_contenido_bloques;
 import Directorios.Inodo;
 
@@ -20,7 +22,11 @@ public class GestorDisco {
     private String ruta;
     private final int tam_bloque = 4096; // fijo interno
 
-    private static int cwd_inodo = 11; // Inoddo del directorio actual, por defecto apunta al root.
+    private static int cwd_inodo = 16; // Inoddo del directorio actual, por defecto apunta al root.
+
+    private int inodo_base = 16;
+
+    private static Usuario usuario_actual;
 
     public GestorDisco(String ruta) {
         this.ruta = ruta;
@@ -47,11 +53,19 @@ public class GestorDisco {
         return tam_bloque;
     }
 
-    public void formatear_disco(int tam_mb) throws IOException {
+    public static Usuario get_usuario_actual() {
+        return usuario_actual;
+    }
+
+    public static void set_usuario_actual(Usuario usuario_actual) {
+        GestorDisco.usuario_actual = usuario_actual;
+    }
+
+    public void formatear_disco(int tam_mb, String nombre_contrasena_root) throws IOException {
         int tam_bytes = tam_mb * 1024 * 1024;
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
-            cwd_inodo = 11; // Aqui empiezan los inodos root, antes de esto son reservados para el sistema.
+            cwd_inodo = inodo_base; // Aqui empiezan los inodos root, antes de esto son reservados para el sistema.
             archivo.setLength(tam_bytes);
 
             // Escribir MBR
@@ -68,10 +82,6 @@ public class GestorDisco {
             SuperBloque sb = new SuperBloque(tam_bytes, tam_bloque);
             archivo.seek(2 * tam_bloque);
             archivo.write(sb.serializar());
-
-            // >> Hasta aqui todo normal, no se hay que modificar.
-
-            // >> A partir de aqui se debe modificar y tener cuidado con lo del bitmap
 
             // Inicializar bitmap
             BitMapBloques bm = new BitMapBloques(sb.bloques_totales);
@@ -124,7 +134,24 @@ public class GestorDisco {
 
             // Crear usuario root
             GestorUsuarios usuarios = new GestorUsuarios();
-            usuarios.crear_usuario_root();
+            GestorGrupos grupos = new GestorGrupos();
+
+            // registrar los datos.
+            int gid_root = grupos.crear_grupo(archivo, "root");
+            int uid_root = usuarios.crear_usuario(archivo, gid_root, "root", nombre_contrasena_root, true, true);
+
+            // Seteamos el usuario actual.
+            set_usuario_actual(usuarios.buscar_usuario("root"));
+
+            // Asignar el usuario root al grupo.
+            grupos.agregar_usuario_a_grupo("root", uid_root);
+
+            // Crear la carpeta home del usuario root.
+            crear_directorio("Home");
+
+            System.out.println("Usuario creado: " + usuarios.buscar_usuario("root"));
+            System.out.println("Grupo creado: " + grupos.buscar_grupo("root"));
+
         }
     }
 
@@ -174,15 +201,15 @@ public class GestorDisco {
             int indice_inodo = buscar_inodo_libre();
             if (indice_inodo < 0)
                 throw new IOException("No hay inodos libres disponibles.");
-            int inodoNuevo = 11 + indice_inodo; // Tomar en cuenta del primer Inodo en donde esta root.
+            int inodoNuevo = inodo_base + indice_inodo; // Tomar en cuenta del primer Inodo en donde esta root.
 
             // Crear inodo hijo y escribirlo en tabla
             // Inodo nuevo = new Inodo(nombre, "root", "root", true, bloques_asignados);
             Inodo nuevo = new Inodo(
                     inodoNuevo, // numero de inodo
                     nombre, // nombre del directorio
-                    1, // propietario (uid root = 1)
-                    1, // grupo (gid root = 1)
+                    usuario_actual.getUid(), // propietario (uid root = 1)
+                    usuario_actual.getGid(), // grupo (gid root = 1)
                     true, // es directorio
                     bloques_asignados, // bloques asignados
                     inodoPadre, // inodo padre
@@ -228,7 +255,7 @@ public class GestorDisco {
         }
     }
 
-    public void crear_archivo(String nombre, int usuarioActual, int grupoActual)
+    public void crear_archivo(String nombre)
             throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
@@ -254,7 +281,7 @@ public class GestorDisco {
             int indice_inodo = buscar_inodo_libre();
             if (indice_inodo < 0)
                 throw new IOException("No hay inodos libres disponibles.");
-            int inodoNuevo = 11 + indice_inodo;
+            int inodoNuevo = inodo_base + indice_inodo;
 
             // Crear inodo de archivo
             // Inodo nuevo = new Inodo(nombre, usuarioActual, grupoActual, false,
@@ -262,8 +289,8 @@ public class GestorDisco {
             Inodo nuevo = new Inodo(
                     inodoNuevo, // numero de inodo
                     nombre, // nombre del archivo
-                    usuarioActual, // propietario (uid)
-                    grupoActual, // grupo (gid)
+                    usuario_actual.getUid(), // propietario (uid)
+                    usuario_actual.getGid(), // grupo (gid)
                     false, // es_directorio = false
                     bloques_asignados, // bloques asignados
                     inodoPadre, // inodo padre
