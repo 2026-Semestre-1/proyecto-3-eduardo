@@ -583,16 +583,22 @@ public class GestorDisco {
         }
     }
 
-    public void listar_directorio_actual(int inodoActual, boolean recursivo) throws IOException {
+    public void listar_directorio_actual(int inodoActual, boolean recursivo, Set<Integer> visitados)
+            throws IOException {
+
+        if (visitados.contains(inodoActual)) {
+            return; // Para indicar cuales han sido revisados.
+        }
+        visitados.add(inodoActual);
+
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
 
-            System.out.println("Mostrando Inodo Actual Pass 1--");
-            debug_dump_inodo(inodoActual);
+            // System.out.println("Mostrando Inodo Actual Pass 1--");
+            // debug_dump_inodo(inodoActual);
 
-            // Obtener inodo del directorio actual con función centralizada
             Inodo dirActual = Inodo.leerInodo(archivo, inodoActual);
 
-            System.out.println("===== LISTANDO DIRECTORIO INODO " + inodoActual + " Nombre directorio"
+            System.out.println("===== LISTANDO DIRECTORIO INODO " + inodoActual + " Nombre directorio "
                     + dirActual.nombre + " =====");
 
             if (dirActual.bloques_asignados == null || dirActual.bloques_asignados.isEmpty()) {
@@ -600,7 +606,6 @@ public class GestorDisco {
                 return;
             }
 
-            // Leer contenido de todos los bloques asignados
             StringBuilder contenidoTotal = new StringBuilder();
             for (int bloque : dirActual.bloques_asignados) {
                 String contenidoBloque = manipular_contenido_bloques.leerBloque(archivo, bloque, tam_bloque);
@@ -615,7 +620,6 @@ public class GestorDisco {
                 return;
             }
 
-            // Procesar entradas
             String[] entradas = contenido.split("\n");
             for (String entrada : entradas) {
                 if (!entrada.isBlank()) {
@@ -628,9 +632,13 @@ public class GestorDisco {
                             System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") +
                                     nombre + " (inodo " + hijoInodo + ")");
 
-                            // Si es recursivo y es un directorio, listar su contenido
-                            if (recursivo && tipo.equals("dir") && !nombre.equals(".") && !nombre.equals("..")) {
-                                listar_directorio_actual(hijoInodo, true);
+                            // Evitar referencias circulares
+                            if (recursivo && tipo.equals("dir")
+                                    && !nombre.equals(".")
+                                    && !nombre.equals("..")
+                                    && hijoInodo != inodoActual
+                                    && !(inodoActual == inodo_base && nombre.equals("users"))) {
+                                listar_directorio_actual(hijoInodo, true, visitados);
                             }
                         } else {
                             System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre);

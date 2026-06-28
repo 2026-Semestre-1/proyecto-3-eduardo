@@ -1,5 +1,8 @@
 package Terminal.Comandos;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import Nucleo.GestorDisco;
 
 public class Comando_ls implements Comando {
@@ -23,7 +26,9 @@ public class Comando_ls implements Comando {
                 }
             }
 
-            disco.listar_directorio_actual(disco.getCwdInodo(), recursivo);
+            Set<Integer> visitados = new HashSet<>();
+
+            disco.listar_directorio_actual(disco.getCwdInodo(), recursivo, visitados);
         } catch (Exception e) {
             System.out.println("Error al listar directorio: " + e.getMessage());
         }
