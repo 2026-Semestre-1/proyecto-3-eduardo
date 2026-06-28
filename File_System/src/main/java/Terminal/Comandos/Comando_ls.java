@@ -15,10 +15,10 @@ public class Comando_ls implements Comando {
             GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
             boolean recursivo = false;
             if (args.length > 1) {
-                if (args[0].equals("-R")) {
+                if (args[1].equals("-R")) {
                     recursivo = true;
                 } else {
-                    System.out.println("Comando desconocido: ls " + args[0]);
+                    System.out.println("Comando desconocido: ls " + args[1]);
                     return;
                 }
             }

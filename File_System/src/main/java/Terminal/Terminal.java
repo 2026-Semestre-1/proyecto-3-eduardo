@@ -141,6 +141,21 @@ public class Terminal {
                     cmdPasswd.ejecutar(partes);
                     break;
 
+                case "whoami":
+                    Comando_Whoami cmdWhoami = new Comando_Whoami();
+                    cmdWhoami.ejecutar(partes);
+                    break;
+
+                case "pwd":
+                    Comando_Pwd cmdPwd = new Comando_Pwd();
+                    cmdPwd.ejecutar(partes);
+                    break;
+
+                case "whereis":
+                    Comando_Whereis cmdWhereis = new Comando_Whereis();
+                    cmdWhereis.ejecutar(partes);
+                    break;
+
                 default:
                     System.out.println("Comando no reconocido: " + comando);
             }

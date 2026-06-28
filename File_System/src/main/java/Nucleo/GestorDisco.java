@@ -4,7 +4,9 @@ import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import Archivos.GestorArchivos;
 
@@ -693,6 +695,91 @@ public class GestorDisco {
         }
     }
 
+    public String construir_ruta() {
+        try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
+            int inodo_actual = cwd_inodo;
+            StringBuilder ruta = new StringBuilder();
+
+            while (inodo_actual != inodo_base) {
+                // System.out.println("GestorDisco (construir_ruta): Inodo actual: " +
+                // inodo_actual);
+
+                Inodo inodo = Inodo.leerInodo(archivo, inodo_actual);
+                if (inodo.nombre.equals("root")) {
+                    ruta.insert(0, "/");
+                } else {
+                    ruta.insert(0, "/" + inodo.nombre);
+                }
+                inodo_actual = inodo.inodo_padre;
+            }
+            ruta.insert(0, "/users");
+
+            return ruta.toString();
+
+        } catch (Exception e) {
+            System.out.println("Error en pwd: " + e.getMessage());
+            return "";
+        }
+    }
+
+    public void buscar_archivo_whereis(String nombreArchivo) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
+            int cwd_original = cwd_inodo; // guardar cwd actual
+            Set<Integer> visitados = new HashSet<>();
+            String resultado = buscar_recursivo(archivo, inodo_base, nombreArchivo, visitados);
+            cwd_inodo = cwd_original; // restaurar cwd
+            if (resultado != null) {
+                System.out.println("Archivo encontrado en: " + resultado);
+            } else {
+                System.out.println("Archivo no encontrado.");
+            }
+
+        } catch (Exception e) {
+            System.out.println("Error en whereis: " + e.getMessage());
+        }
+    }
+
+    private String buscar_recursivo(RandomAccessFile archivo, int inodo_actual, String nombreArchivo,
+            Set<Integer> visitados)
+            throws IOException {
+        if (visitados.contains(inodo_actual)) {
+            return null; // Ya fue visitado.
+        }
+        visitados.add(inodo_actual);
+
+        Inodo dir = Inodo.leerInodo(archivo, inodo_actual);
+        if (!dir.es_directorio)
+            return null;
+
+        int bloque_datos = dir.bloques_asignados.get(0);
+        String contenido = manipular_contenido_bloques.leerBloque(archivo, bloque_datos, tam_bloque);
+
+        for (String entrada : contenido.split("\n")) {
+            if (!entrada.isBlank()) {
+                String[] partes = entrada.split(";");
+                if (partes.length >= 3) {
+                    String nombre = partes[0];
+                    int inodo_num = Integer.parseInt(partes[2]);
+
+                    if (nombre.equals(nombreArchivo)) {
+                        // encontrado → mover cwd y construir ruta
+                        cwd_inodo = inodo_actual;
+                        return construir_ruta() + "/" + nombreArchivo;
+                    }
+
+                    // si es directorio, entrar recursivamente
+                    if (partes[1].equals("dir") && !nombre.equals(".") && !nombre.equals("..")) {
+                        String ruta = buscar_recursivo(archivo, inodo_num, nombreArchivo, visitados);
+                        if (ruta != null)
+                            return ruta;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // Funciones para la tabla de archivos abiertos.
     public void establecer_archivo_abierto(String nombre, String modo) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
 
