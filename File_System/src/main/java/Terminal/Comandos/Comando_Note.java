@@ -23,9 +23,9 @@ public class Comando_Note implements Comando {
             return;
         }
         String nombreArchivo = args[1];
-        GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
+        GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
 
-        try (RandomAccessFile archivo = new RandomAccessFile(disco.get_ruta(), "rw")) {
+        try (RandomAccessFile archivo = new RandomAccessFile(GestorDisco.get_ruta(), "rw")) {
             // Buscar el inodo del archivo
             int inodoPadre = disco.getCwdInodo();
             Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
@@ -106,12 +106,15 @@ public class Comando_Note implements Comando {
             System.out.println(contenidoActual.toString());
             System.out.println("Edite el contenido, termine con Ctrl+X en una línea aparte.");
 
+            disco.establecer_archivo_abierto(nombreArchivo, "rw");
+
             // Editor interactivo
             Scanner sc = new Scanner(System.in);
             StringBuilder nuevoContenido = new StringBuilder(contenidoActual.toString());
             while (true) {
                 String linea = sc.nextLine();
                 if (linea.equalsIgnoreCase("\u0018") || linea.equalsIgnoreCase("Ctrl+X")) {
+                    disco.cerrar_archivo_abierto(nombreArchivo);
                     break;
                 }
                 nuevoContenido.append(linea).append("\n");

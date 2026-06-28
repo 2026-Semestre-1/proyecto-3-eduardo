@@ -6,6 +6,7 @@ import java.util.Scanner;
 import Nucleo.GestorDisco;
 import Usuarios.GestorGrupos;
 import Usuarios.GestorUsuarios;
+import Usuarios.Usuario;
 
 public class Comando_Useradd implements Comando {
     @Override
@@ -37,9 +38,9 @@ public class Comando_Useradd implements Comando {
             return;
         }
 
-        GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
+        GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
 
-        try (RandomAccessFile archivo = new RandomAccessFile(disco.get_ruta(), "rw")) {
+        try (RandomAccessFile archivo = new RandomAccessFile(GestorDisco.get_ruta(), "rw")) {
 
             // Primero se crear el grupo
             GestorGrupos gg = new GestorGrupos();
@@ -54,8 +55,11 @@ public class Comando_Useradd implements Comando {
             // Agregarmos el usuario a los miembros del grupo.
             gg.agregar_usuario_a_grupo(gid, uid);
 
-            // Aqui se deberia de procesar la creacion de la carpeta del usuario.
+            // Buscar el usuario que se acaba de crear.
+            Usuario user = gu.buscar_usuario(nombre_usuario);
 
+            // Aqui se deberia de procesar la creacion de la carpeta del usuario.
+            disco.crear_carpeta_usuario(archivo, user);
         } catch (Exception e) {
             System.out.println("Error al crear usuario: " + e.getMessage());
         }

@@ -17,7 +17,7 @@ public class Comando_mkdir implements Comando {
         }
         String nombre = args[1];
         try {
-            GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
+            GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
             disco.crear_directorio(nombre);
             System.out.println("Directorio creado: " + nombre);
         } catch (Exception e) {

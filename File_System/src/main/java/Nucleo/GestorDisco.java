@@ -5,6 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import Archivos.GestorArchivos;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -19,7 +22,7 @@ import Directorios.Inodo;
 
 public class GestorDisco {
 
-    private String ruta;
+    private static String ruta;
     private final int tam_bloque = 4096; // fijo interno
 
     private static int cwd_inodo = 20; // Inoddo del directorio actual, por defecto apunta al root.
@@ -48,11 +51,11 @@ public class GestorDisco {
         this.cwd_inodo = cwd_inodo;
     }
 
-    public void set_ruta(String ruta) {
-        this.ruta = ruta;
+    public static void set_ruta(String ruta) {
+        GestorDisco.ruta = ruta;
     }
 
-    public String get_ruta() {
+    public static String get_ruta() {
         return ruta;
     }
 
@@ -683,6 +686,57 @@ public class GestorDisco {
         }
     }
 
+    public void establecer_archivo_abierto(String nombre, String modo) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
+
+            Inodo inodo_archivo = buscar_inodo_por_nombre(archivo, nombre);
+            if (inodo_archivo == null) {
+                System.out.println("Archivo no encontrado: " + nombre);
+                return;
+            }
+            if (inodo_archivo.es_directorio) {
+                System.out.println("El archivo no es un archivo.");
+                return;
+            }
+
+            GestorArchivos gestor_archivos = new GestorArchivos();
+            gestor_archivos.cargar_tabla(archivo);
+
+            // Abrir root para inicialización
+            gestor_archivos.abrir_archivo(archivo, inodo_archivo.numero, modo, usuario_actual.getUid(),
+                    usuario_actual.getGid());
+
+        } catch (ClassNotFoundException e) {
+
+            e.printStackTrace();
+        }
+    }
+
+    public void cerrar_archivo_abierto(String nombre) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
+
+            Inodo inodo_archivo = buscar_inodo_por_nombre(archivo, nombre);
+            if (inodo_archivo == null) {
+                System.out.println("Archivo no encontrado: " + nombre);
+                return;
+            }
+            if (inodo_archivo.es_directorio) {
+                System.out.println("El archivo no es un archivo.");
+                return;
+            }
+
+            GestorArchivos gestor_archivos = new GestorArchivos();
+            gestor_archivos.cargar_tabla(archivo);
+
+            // Cerrar el archivo
+            gestor_archivos.cerrar_archivo(archivo, inodo_archivo.numero);
+
+        } catch (ClassNotFoundException e) {
+
+            e.printStackTrace();
+        }
+    }
+
     /**
      * 
      * @return El inodo que esta libre el la tabla de inodos, pero lo que devuelve
@@ -710,6 +764,33 @@ public class GestorDisco {
 
             return indice; // índice dentro de la tabla de inodos
         }
+    }
+
+    public Inodo buscar_inodo_por_nombre(RandomAccessFile archivo, String nombre) throws IOException {
+        // Leer el inodo del directorio actual
+        Inodo directorio_actual = Inodo.leerInodo(archivo, cwd_inodo);
+
+        // Usar el primer bloque de datos asignado
+        int bloque_datos = directorio_actual.bloques_asignados.get(0);
+        String contenido = manipular_contenido_bloques.leerBloque(archivo, bloque_datos, tam_bloque);
+
+        // Recorrer entradas del directorio
+        for (String entrada : contenido.split("\n")) {
+            if (!entrada.isBlank()) {
+                String[] partes = entrada.split(";");
+                if (partes.length >= 3) {
+                    String nombreEntrada = partes[0];
+                    int inodo_num = Integer.parseInt(partes[2]);
+
+                    if (nombreEntrada.equals(nombre)) {
+                        // Devolver el objeto Inodo completo
+                        return Inodo.leerInodo(archivo, inodo_num);
+                    }
+                }
+            }
+        }
+
+        return null; // no encontrado
     }
 
     public void debug_dump_bitmap(int cantidad) throws IOException {

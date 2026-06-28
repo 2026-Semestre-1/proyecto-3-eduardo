@@ -17,7 +17,7 @@ public class Comando_Cd implements Comando {
             }
 
             String nombre_directorio = args[1];
-            GestorDisco gestor_disco = new GestorDisco("miDiscoDuro.fs");
+            GestorDisco gestor_disco = new GestorDisco(GestorDisco.get_ruta());
             gestor_disco.navegacion_directorios(nombre_directorio);
 
         } catch (Exception e) {

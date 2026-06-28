@@ -15,6 +15,8 @@ public class Comando_Format implements Comando {
     public void ejecutar(String[] args) {
         System.out.println("Ingrese el tamaño del disco en MB:");
         try {
+            // Revisar esto para que no se pueda agregar algo diferente de un numero y que
+            // no sea menor a 20.
             java.util.Scanner sc = new java.util.Scanner(System.in);
             int tam_mb = sc.nextInt();
 
@@ -31,11 +33,8 @@ public class Comando_Format implements Comando {
             GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
             disco.formatear_disco(tam_mb, contrasena_root);
 
-            // Print de DEBUG.
-            // GestorDisco disco2 = new GestorDisco("miDiscoDuro.fs");
-            // disco2.debug_dump_inodo(5);
             System.out.println("Disco formateado con éxito. Usuario root creado.");
-            // sc.close();
+
         } catch (Exception e) {
             System.out.println("Error al formatear: " + e.getMessage());
         }

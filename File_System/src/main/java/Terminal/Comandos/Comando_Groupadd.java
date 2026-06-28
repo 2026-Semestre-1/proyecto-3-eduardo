@@ -2,6 +2,7 @@ package Terminal.Comandos;
 
 import java.io.RandomAccessFile;
 
+import Nucleo.GestorDisco;
 import Usuarios.GestorGrupos;
 
 public class Comando_Groupadd implements Comando {
@@ -20,7 +21,7 @@ public class Comando_Groupadd implements Comando {
 
         String nombre_grupo = args[1];
 
-        try (RandomAccessFile archivo = new RandomAccessFile("miDiscoDuro.fs", "rw")) {
+        try (RandomAccessFile archivo = new RandomAccessFile(GestorDisco.get_ruta(), "rw")) {
             GestorGrupos gg = new GestorGrupos();
             gg.cargar_grupos(archivo);
             gg.crear_grupo(archivo, nombre_grupo);

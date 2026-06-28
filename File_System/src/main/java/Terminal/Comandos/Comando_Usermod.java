@@ -2,6 +2,7 @@ package Terminal.Comandos;
 
 import java.io.RandomAccessFile;
 
+import Nucleo.GestorDisco;
 import Usuarios.GestorGrupos;
 import Usuarios.GestorUsuarios;
 import Usuarios.Grupo;
@@ -29,7 +30,7 @@ public class Comando_Usermod implements Comando {
             return;
         }
 
-        try (RandomAccessFile archivo = new RandomAccessFile("miDiscoDuro.fs", "rw")) {
+        try (RandomAccessFile archivo = new RandomAccessFile(GestorDisco.get_ruta(), "rw")) {
             GestorUsuarios gu = new GestorUsuarios();
             gu.cargar_usuarios(archivo);
 

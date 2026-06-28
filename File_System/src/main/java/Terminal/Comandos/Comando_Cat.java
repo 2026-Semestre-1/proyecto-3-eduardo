@@ -18,7 +18,7 @@ public class Comando_Cat implements Comando {
         }
         String nombreArchivo = args[1];
         try {
-            GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
+            GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
             String contenido = disco.leer_archivo(nombreArchivo);
             System.out.println(contenido);
         } catch (IOException e) {

@@ -12,7 +12,7 @@ public class Comando_InfoFS implements Comando {
     @Override
     public void ejecutar(String[] args) {
         try {
-            GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
+            GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
             disco.mostrar_info();
         } catch (Exception e) {
             System.out.println("Error al leer infoFS: " + e.getMessage());

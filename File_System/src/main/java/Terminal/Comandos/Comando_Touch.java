@@ -11,7 +11,7 @@ public class Comando_Touch implements Comando {
     @Override
     public void ejecutar(String[] args) {
         try {
-            GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
+            GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
 
             if (args.length > 1) {
                 // if (args[0].equals("-R")) {

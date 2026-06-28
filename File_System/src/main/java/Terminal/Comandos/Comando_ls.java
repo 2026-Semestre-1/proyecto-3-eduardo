@@ -12,7 +12,7 @@ public class Comando_ls implements Comando {
     @Override
     public void ejecutar(String[] args) {
         try {
-            GestorDisco disco = new GestorDisco("miDiscoDuro.fs");
+            GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
             boolean recursivo = false;
             if (args.length > 1) {
                 if (args[0].equals("-R")) {

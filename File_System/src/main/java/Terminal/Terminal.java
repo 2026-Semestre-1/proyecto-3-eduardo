@@ -1,17 +1,49 @@
 package Terminal;
 
 import Terminal.Comandos.*;
+import Usuarios.GestorUsuarios;
+import Usuarios.Usuario;
 import Nucleo.GestorDisco;
 
+import java.io.RandomAccessFile;
 import java.util.Scanner;
 
 public class Terminal {
 
     private String usuario_actual = "root";
+    GestorDisco disco;
 
-    public void iniciar() {
+    public void iniciar(String[] args) {
         System.out.println("Bienvenido al sistema de archivos miFS");
         Scanner sc = new Scanner(System.in);
+
+        if (args.length == 0) {
+
+            boolean exito = generar_disco();
+            if (exito) {
+                boolean sesion = iniciar_sesion();
+                if (sesion) {
+                    System.out.println("Sesion iniciada");
+                } else {
+                    sc.close();
+                    return;
+                }
+            }
+
+        } else {
+
+            boolean exito = cargar_disco(args[0]);
+            if (exito) {
+                boolean sesion = iniciar_sesion();
+                if (sesion) {
+                    System.out.println("Sesion iniciada");
+                } else {
+                    sc.close();
+                    return;
+                }
+            }
+
+        }
 
         while (true) {
 
@@ -103,6 +135,82 @@ public class Terminal {
             }
         }
         // sc.close();
+    }
+
+    public boolean generar_disco() {
+        // Cuando no se especifica un disco, automa
+        try {
+            System.out.println("No se especificó disco. Se procederá a formatear uno nuevo.");
+            Comando_Format cmdFormat = new Comando_Format();
+            cmdFormat.ejecutar(new String[] { "format" });
+            usuario_actual = "root";
+            // iniciar_sesion();
+            cargar_ultimo_usuario_activo();
+            return true;
+
+        } catch (Exception e) {
+            System.out.println("Error al generar disco: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean cargar_disco(String nombre_disco) {
+        try {
+            String nombreDisco = nombre_disco;
+            disco = new GestorDisco(nombreDisco);
+            cargar_ultimo_usuario_activo();
+            return true;
+
+        } catch (Exception e) {
+            System.out.println("Error al cargar disco: " + e.getMessage());
+            return false;
+        }
+
+    }
+
+    public boolean cargar_ultimo_usuario_activo() {
+        // Cargar los datos del usuario activo.
+        try (RandomAccessFile archivo = new RandomAccessFile(GestorDisco.get_ruta(), "rw")) {
+            GestorUsuarios gu = new GestorUsuarios();
+            gu.cargar_usuarios(archivo);
+
+            Usuario user = gu.buscar_usuario_activo();
+            GestorDisco.set_usuario_actual(user);
+            usuario_actual = user.getNombre();
+
+            return true;
+
+        } catch (Exception e) {
+            System.out.println("Error al cargar usuarios: " + e.getMessage());
+            return false;
+        }
+
+    }
+
+    public boolean iniciar_sesion() {
+        try {
+            Scanner sc = new Scanner(System.in);
+
+            int count = 3;
+            while (count != 0) {
+                System.out.print(usuario_actual + "@miFS: \n");
+                System.out.println("Ingrese su contraseña: ");
+                String pass = sc.nextLine().trim();
+
+                if (pass.equals(GestorDisco.get_usuario_actual().getContrasena())) {
+                    return true;
+                } else {
+                    count--;
+                }
+
+            }
+            System.out.println("Demasiados intentos fallidos");
+            return false;
+
+        } catch (Exception e) {
+            System.out.println("Error al iniciar sesion: " + e.getMessage());
+            return false;
+        }
     }
 
 }
