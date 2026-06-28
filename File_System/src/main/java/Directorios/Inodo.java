@@ -29,6 +29,8 @@ public class Inodo {
     public int enlaces; // contador de enlaces duros
     public int permisos;
 
+    // public String tipo;
+
     // Observaciones adicionales:
     // La cantidad de bloques asignados lo obtenemos de la lista.
 
@@ -282,6 +284,14 @@ public class Inodo {
         Inodo inodo = leerInodo(archivo, inodoNum);
         inodo.bloques_asignados.remove(Integer.valueOf(bloque));
         escribirInodo(archivo, inodoNum, inodo);
+    }
+
+    public void set_enlaces(int enlaces) {
+        this.enlaces = enlaces;
+    }
+
+    public int get_enlaces() {
+        return this.enlaces;
     }
 
     public void mostrarInodo() {

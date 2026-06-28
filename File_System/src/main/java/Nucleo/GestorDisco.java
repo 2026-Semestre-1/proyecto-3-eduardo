@@ -525,6 +525,9 @@ public class GestorDisco {
             for (String entrada : entradas) {
                 if (!entrada.isBlank()) {
                     String[] partes = entrada.split(";");
+
+                    // Aqui tendria que validarse si es un enlace. Y comprobarse donde esta el
+                    // archivo real.
                     if (partes.length >= 3 && partes[0].equals(nombreArchivo) && partes[1].equals("file")) {
                         inodoArchivo = Integer.parseInt(partes[2]);
                         break;
@@ -593,8 +596,8 @@ public class GestorDisco {
 
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
 
-            // System.out.println("Mostrando Inodo Actual Pass 1--");
-            // debug_dump_inodo(inodoActual);
+            System.out.println("Mostrando Inodo Actual Pass 1--");
+            debug_dump_inodo(inodoActual);
 
             Inodo dirActual = Inodo.leerInodo(archivo, inodoActual);
 
@@ -627,12 +630,20 @@ public class GestorDisco {
                     if (partes.length >= 2) {
                         String nombre = partes[0];
                         String tipo = partes[1];
+
                         if (partes.length == 3) {
                             int hijoInodo = Integer.parseInt(partes[2]);
+                            Inodo hijo = Inodo.leerInodo(archivo, hijoInodo);
+
+                            if (hijo.get_enlaces() == -1) {
+                                System.out.println("[LINK] " + nombre + " (inodo " + hijoInodo + ")");
+                                // No entrar recursivamente en enlaces
+                                continue;
+                            }
+
                             System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") +
                                     nombre + " (inodo " + hijoInodo + ")");
 
-                            // Evitar referencias circulares
                             if (recursivo && tipo.equals("dir")
                                     && !nombre.equals(".")
                                     && !nombre.equals("..")
@@ -640,9 +651,8 @@ public class GestorDisco {
                                     && !(inodoActual == inodo_base && nombre.equals("users"))) {
                                 listar_directorio_actual(hijoInodo, true, visitados);
                             }
-                        } else {
-                            System.out.println((tipo.equals("dir") ? "[DIR] " : "[FILE] ") + nombre);
                         }
+
                     } else {
                         System.out.println("Entrada inválida: " + entrada);
                     }
@@ -714,7 +724,7 @@ public class GestorDisco {
 
                 Inodo inodo = Inodo.leerInodo(archivo, inodo_actual);
                 if (inodo.nombre.equals("root")) {
-                    ruta.insert(0, "/");
+                    ruta.insert(0, "/root");
                 } else {
                     ruta.insert(0, "/" + inodo.nombre);
                 }
@@ -785,6 +795,115 @@ public class GestorDisco {
             }
         }
         return null;
+    }
+
+    public void crear_enlace(String nombreEnlace, String rutaObjetivo) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+
+            String[] partesRuta = rutaObjetivo.split("/");
+            String nombreArchivo = partesRuta[partesRuta.length - 1];
+
+            if (!validar_objetivo_enlace(rutaObjetivo, nombreArchivo)) {
+                System.out.println(
+                        "Error: no se puede crear enlace porque el archivo objetivo no existe en la ruta indicada.");
+                return;
+            }
+
+            int inodoPadre = getCwdInodo();
+
+            // Leer superbloque
+            archivo.seek(2 * tam_bloque);
+            byte[] buffer = new byte[tam_bloque];
+            archivo.read(buffer);
+            SuperBloque sb = SuperBloque.deserializar(buffer);
+
+            // Asignar bloque libre para contenido (ruta del objetivo)
+            int bloque_contenido = asignar_bloque_libre();
+            if (bloque_contenido < 0)
+                throw new IOException("No hay bloques libres disponibles.");
+            sb.bloques_libres--;
+
+            List<Integer> bloques_asignados = new ArrayList<>();
+            bloques_asignados.add(bloque_contenido);
+
+            // Buscar inodo libre
+            int indice_inodo = asignar_inodo_libre();
+            if (indice_inodo < 0)
+                throw new IOException("No hay inodos libres disponibles.");
+            int inodoNuevo = inodo_base + indice_inodo;
+
+            // Crear inodo de enlace simbolico
+            Inodo enlace = new Inodo(
+                    inodoNuevo,
+                    nombreEnlace,
+                    usuario_actual.getUid(),
+                    usuario_actual.getGid(),
+                    false, // no es directorio
+                    bloques_asignados,
+                    inodoPadre,
+                    77 // permisos
+            );
+            enlace.set_enlaces(-1);
+
+            Inodo.escribirInodo(archivo, inodoNuevo, enlace);
+
+            // Guardar la ruta del objetivo en el bloque
+            manipular_contenido_bloques.escribirBloque(archivo, bloque_contenido, rutaObjetivo, tam_bloque);
+
+            // Actualizar directorio padre
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+            int bloquePadreDatos = padre.bloques_asignados.get(0);
+            String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadreDatos, tam_bloque);
+            if (!contenidoPadre.endsWith("\n")) {
+                contenidoPadre += "\n";
+            }
+            contenidoPadre += nombreEnlace + ";link;" + inodoNuevo + "\n";
+            manipular_contenido_bloques.escribirBloque(archivo, bloquePadreDatos, contenidoPadre, tam_bloque);
+
+            // Actualizar superbloque
+            archivo.seek(2 * tam_bloque);
+            archivo.write(sb.serializar());
+
+            System.out.println("Enlace simbolico creado: " + nombreEnlace + " -> " + rutaObjetivo);
+        }
+    }
+
+    /**
+     * Nombre: validar_objetivo_enlace
+     * 
+     * Descripcion: Valida que el archivo exista y que la ruta indicada coincida
+     * con la ubicación real del archivo.
+     * 
+     * @param rutaObjetivo  Ruta del archivo objetivo.
+     * @param nombreArchivo Nombre del archivo a buscar.
+     * @return true si la ruta indicada coincide con la ubicación real del archivo,
+     *         false en caso contrario.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
+    public boolean validar_objetivo_enlace(String rutaObjetivo, String nombreArchivo) throws IOException {
+
+        // Validar que el archivo exista
+        try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
+            int cwd_original = cwd_inodo; // guardar cwd actual
+            Set<Integer> visitados = new HashSet<>();
+            String resultado = buscar_recursivo(archivo, inodo_base, nombreArchivo, visitados);
+            cwd_inodo = cwd_original; // restaurar cwd
+            if (resultado != null) {
+                // System.out.println("Archivo encontrado en: " + resultado);
+                if (!resultado.equals(rutaObjetivo)) {
+                    System.out.println("La ruta indicada no coincide con la ubicación real del archivo.");
+                    System.out.println("Ruta real: " + resultado);
+                    return false;
+                }
+            } else {
+                System.out.println("Archivo no encontrado.");
+            }
+
+        } catch (Exception e) {
+            System.out.println("Error en whereis: " + e.getMessage());
+        }
+
+        return true; // validación exitosa
     }
 
     // Funciones para la tabla de archivos abiertos.

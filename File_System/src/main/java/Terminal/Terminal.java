@@ -156,6 +156,11 @@ public class Terminal {
                     cmdWhereis.ejecutar(partes);
                     break;
 
+                case "ln":
+                    Comando_Ln cmdLn = new Comando_Ln();
+                    cmdLn.ejecutar(partes);
+                    break;
+
                 default:
                     System.out.println("Comando no reconocido: " + comando);
             }
