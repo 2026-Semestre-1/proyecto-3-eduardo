@@ -104,6 +104,10 @@ public class Usuario implements Serializable {
         this.activo = activo;
     }
 
+    public boolean comprobar_contrasena(String contrasena) {
+        return this.contrasena.equals(contrasena);
+    }
+
     // Método toString
     @Override
     public String toString() {

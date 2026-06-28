@@ -130,6 +130,17 @@ public class Terminal {
                     cmdCd.ejecutar(partes);
                     break;
 
+                case "su":
+                    Comando_Su cmdSu = new Comando_Su();
+                    cmdSu.ejecutar(partes);
+                    usuario_actual = GestorDisco.get_usuario_actual().getNombre();
+                    break;
+
+                case "passwd":
+                    Comando_Passwd cmdPasswd = new Comando_Passwd();
+                    cmdPasswd.ejecutar(partes);
+                    break;
+
                 default:
                     System.out.println("Comando no reconocido: " + comando);
             }

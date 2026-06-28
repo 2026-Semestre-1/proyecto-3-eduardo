@@ -78,6 +78,19 @@ public class GestorUsuarios {
         }
     }
 
+    /**
+     * Nombre: procesar_guardado
+     * 
+     * Descripcion: Procesa el guardado de los usuarios en el archivo, llama al
+     * metodo private guardar_usuarios.
+     * 
+     * @param archivo archivo en el que se encuentran los usuarios
+     * @throws IOException si ocurre un error al guardar los usuarios
+     */
+    public void procesar_guardado(RandomAccessFile archivo) throws IOException {
+        guardar_usuarios(archivo);
+    }
+
     // Cargar lista de usuarios desde bloques 11 y 12
     public void cargar_usuarios(RandomAccessFile archivo) throws IOException, ClassNotFoundException {
         String bloque1 = manipular_contenido_bloques.leerBloque(archivo, BLOQUE_USUARIOS_1, tamBloque);
@@ -156,6 +169,12 @@ public class GestorUsuarios {
         }
         u.eliminar_grupo_secundario(gid);
         guardar_usuarios(archivo);
+    }
+
+    public void mostrar_usuarios() {
+        for (Usuario u : usuarios) {
+            System.out.println(u);
+        }
     }
 
 }
