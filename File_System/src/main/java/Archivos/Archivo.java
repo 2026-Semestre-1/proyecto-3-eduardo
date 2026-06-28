@@ -39,6 +39,22 @@ public class Archivo implements Serializable {
         return activo;
     }
 
+    public int get_uid() {
+        return uid;
+    }
+
+    public int get_gid() {
+        return gid;
+    }
+
+    public void set_uid(int uid) {
+        this.uid = uid;
+    }
+
+    public void set_gid(int gid) {
+        this.gid = gid;
+    }
+
     public void cerrar() {
         this.activo = false;
     }

@@ -157,6 +157,7 @@ public class Comando_Note implements Comando {
                 System.out.println("Cambios descartados.");
             }
 
+            sc.close();
         } catch (IOException e) {
             System.out.println("Error en Note: " + e.getMessage());
         }

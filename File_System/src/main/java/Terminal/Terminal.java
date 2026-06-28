@@ -198,6 +198,7 @@ public class Terminal {
                 String pass = sc.nextLine().trim();
 
                 if (pass.equals(GestorDisco.get_usuario_actual().getContrasena())) {
+                    sc.close();
                     return true;
                 } else {
                     count--;
@@ -205,6 +206,7 @@ public class Terminal {
 
             }
             System.out.println("Demasiados intentos fallidos");
+            sc.close();
             return false;
 
         } catch (Exception e) {

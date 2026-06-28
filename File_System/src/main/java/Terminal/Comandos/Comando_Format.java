@@ -35,6 +35,7 @@ public class Comando_Format implements Comando {
 
             System.out.println("Disco formateado con éxito. Usuario root creado.");
 
+            sc.close();
         } catch (Exception e) {
             System.out.println("Error al formatear: " + e.getMessage());
         }
