@@ -6,7 +6,7 @@ import Archivos.Archivo;
 import Archivos.GestorArchivos;
 import Nucleo.GestorDisco;
 
-public class comando_viewFilesOpen implements Comando {
+public class Comando_ViewFilesOpen implements Comando {
 
     @Override
     public String nombre_comando() {
@@ -32,4 +32,5 @@ public class comando_viewFilesOpen implements Comando {
             System.out.println("Error al consultar archivos abiertos: " + e.getMessage());
         }
     }
+
 }

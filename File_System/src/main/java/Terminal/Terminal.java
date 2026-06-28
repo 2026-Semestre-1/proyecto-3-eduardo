@@ -130,6 +130,11 @@ public class Terminal {
                     cmdCd.ejecutar(partes);
                     break;
 
+                case "mv":
+                    Comando_Mv cmdMv = new Comando_Mv();
+                    cmdMv.ejecutar(partes);
+                    break;
+
                 case "su":
                     Comando_Su cmdSu = new Comando_Su();
                     cmdSu.ejecutar(partes);
@@ -159,6 +164,36 @@ public class Terminal {
                 case "ln":
                     Comando_Ln cmdLn = new Comando_Ln();
                     cmdLn.ejecutar(partes);
+                    break;
+
+                case "clear":
+                    Comando_Clear cmdClear = new Comando_Clear();
+                    cmdClear.ejecutar(partes);
+                    break;
+
+                case "chown":
+                    Comando_Chown cmdChown = new Comando_Chown();
+                    cmdChown.ejecutar(partes);
+                    break;
+
+                case "chgrp":
+                    Comando_Chgrp cmdChgrp = new Comando_Chgrp();
+                    cmdChgrp.ejecutar(partes);
+                    break;
+
+                case "chmod":
+                    Comando_Chmod cmdChmod = new Comando_Chmod();
+                    cmdChmod.ejecutar(partes);
+                    break;
+
+                case "viewFilesOpen":
+                    Comando_ViewFilesOpen cmdViewFilesOpen = new Comando_ViewFilesOpen();
+                    cmdViewFilesOpen.ejecutar(partes);
+                    break;
+
+                case "viewFCB":
+                    Comando_ViewFCB cmdViewFCB = new Comando_ViewFCB();
+                    cmdViewFCB.ejecutar(partes);
                     break;
 
                 default:

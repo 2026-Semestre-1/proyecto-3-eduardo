@@ -7,7 +7,9 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Date;
 
+import Archivos.Archivo;
 import Archivos.GestorArchivos;
 
 import java.io.ByteArrayOutputStream;
@@ -18,6 +20,7 @@ import Nucleo.MasterBootRecorder.MBR;
 import Nucleo.MasterBootRecorder.ParticionBoot;
 import Usuarios.GestorGrupos;
 import Usuarios.GestorUsuarios;
+import Usuarios.Grupo;
 import Usuarios.Usuario;
 import Utils.manipular_contenido_bloques;
 import Directorios.Inodo;
@@ -293,9 +296,16 @@ public class GestorDisco {
         // Crear carpeta Home dentro del usuario
         cwd_inodo = numero_inodo;
 
+        // Cambiar el usuario actual.
+        Usuario anterior = usuario_actual;
+
+        usuario_actual = usuario;
+
         crear_directorio("Home");
         // Volvemos a la navegacion previa.
         cwd_inodo = inodo_actual_guardado;
+
+        usuario_actual = anterior;
     }
 
     public void mostrar_info() {
@@ -307,11 +317,32 @@ public class GestorDisco {
 
             SuperBloque sb = SuperBloque.deserializar(buffer);
 
+            int bloquesOcupados = sb.bloques_totales - sb.bloques_libres;
+            long espacioUtilizado = (long) bloquesOcupados * sb.tam_bloque;
+            long espacioDisponible = (long) sb.bloques_libres * sb.tam_bloque;
+
             System.out.println("Nombre del FileSystem: " + sb.nombre_fs);
             System.out.println("Tamaño: " + (sb.tam_bytes / (1024 * 1024)) + " MB");
+            // System.out.println("Espacio utilizado: " + (espacioUtilizado / (1024 * 1024))
+            // + " MB");
+            // System.out.println("Disponible: " + (espacioDisponible / (1024 * 1024)) + "
+            // MB");
+            // Mostrar espacio utilizado
+            if (espacioUtilizado >= (1024 * 1024)) {
+                System.out.println("Espacio utilizado: " + (espacioUtilizado / (1024 * 1024)) + " MB");
+            } else {
+                System.out.println("Espacio utilizado: " + (espacioUtilizado / 1024) + " KB");
+            }
+
+            // Mostrar espacio disponible
+            if (espacioDisponible >= (1024 * 1024)) {
+                System.out.println("Disponible: " + (espacioDisponible / (1024 * 1024)) + " MB");
+            } else {
+                System.out.println("Disponible: " + (espacioDisponible / 1024) + " KB");
+            }
             System.out.println("Bloques totales: " + sb.bloques_totales);
             System.out.println("Bloques libres: " + sb.bloques_libres);
-            System.out.println("Bloques ocupados: " + (sb.bloques_totales - sb.bloques_libres));
+            System.out.println("Bloques ocupados: " + bloquesOcupados);
         } catch (Exception e) {
             System.out.println("Error al leer superbloque: " + e.getMessage());
         }
@@ -586,6 +617,22 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: ls
+     * 
+     * Descripcion: Comando para listar el contenido de un directorio.
+     * Si se agrega el parametro "-r" se listara el contenido de forma recursiva.
+     * Si se agrega el parametro "-i" se mostrara la informacion de los archivos y
+     * directorios de forma detallada.
+     * Si no se agrega ningun parametro se listara el contenido del directorio
+     * actual.
+     * 
+     * @param inodoActual El inodo del directorio actual.
+     * @param recursivo   Indica si se debe mostrar la informacion de los archivos y
+     *                    directorios de forma recursiva.
+     * @param visitados   Un conjunto de inodos que han sido visitados.
+     * @throws IOException Si ocurre un error al leer el directorio.
+     */
     public void listar_directorio_actual(int inodoActual, boolean recursivo, Set<Integer> visitados)
             throws IOException {
 
@@ -596,8 +643,8 @@ public class GestorDisco {
 
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
 
-            System.out.println("Mostrando Inodo Actual Pass 1--");
-            debug_dump_inodo(inodoActual);
+            // System.out.println("Mostrando Inodo Actual Pass 1--");
+            // debug_dump_inodo(inodoActual);
 
             Inodo dirActual = Inodo.leerInodo(archivo, inodoActual);
 
@@ -663,6 +710,69 @@ public class GestorDisco {
         }
     }
 
+    public void mover_renombrar(String origen, String destino) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            int inodoOrigen = buscar_inodo_por_ruta(origen);
+            if (inodoOrigen == -1) {
+                System.out.println("Error: no se encontró el archivo/directorio origen " + origen);
+                return;
+            }
+
+            Inodo inodoObj = Inodo.leerInodo(archivo, inodoOrigen);
+
+            // Validar permisos
+            if (usuario_actual.getUid() != 1) { // no es root
+                boolean esPropietario = usuario_actual.getUid() == inodoObj.propietario;
+                boolean esGrupo = usuario_actual.getGid() == inodoObj.grupo;
+
+                int permisosDueño = inodoObj.permisos / 10; // primer dígito
+                int permisosGrupo = inodoObj.permisos % 10; // segundo dígito
+
+                if (esPropietario && permisosDueño != 7) {
+                    System.out.println("Error: el propietario no tiene permisos suficientes.");
+                    return;
+                }
+                if (esGrupo && permisosGrupo != 7) {
+                    System.out.println("Error: el grupo no tiene permisos suficientes.");
+                    return;
+                }
+                if (!esPropietario && !esGrupo) {
+                    System.out.println("Error: usuario sin permisos para mover/renombrar.");
+                    return;
+                }
+            }
+
+            // Verificar si destino es un directorio existente
+            int inodoDestino = buscar_inodo_por_ruta(destino);
+
+            if (inodoDestino != -1) {
+                Inodo destinoInodo = Inodo.leerInodo(archivo, inodoDestino);
+                if (!destinoInodo.es_directorio) {
+                    System.out.println("Error: el destino debe ser un directorio.");
+                    return;
+                }
+
+                // Validar que no se mueva un padre dentro de un hijo
+                if (origen.startsWith(destino)) {
+                    System.out.println("Error: no se puede mover un directorio padre dentro de su hijo.");
+                    return;
+                }
+
+                // Movimiento: actualizar inodo padre
+                inodoObj.inodo_padre = destinoInodo.numero;
+                Inodo.escribirInodo(archivo, inodoOrigen, inodoObj);
+                System.out.println("Elemento movido: " + origen + " → " + destino);
+            } else {
+                // Renombrado
+                String[] partes = destino.split("/");
+                String nuevoNombre = partes[partes.length - 1];
+                inodoObj.nombre = nuevoNombre;
+                Inodo.escribirInodo(archivo, inodoOrigen, inodoObj);
+                System.out.println("Elemento renombrado: " + origen + " → " + nuevoNombre);
+            }
+        }
+    }
+
     /**
      * Nombre: navegacion_directorios
      * 
@@ -713,6 +823,13 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: construir_ruta
+     * 
+     * Descripcion: Construye la ruta del directorio actual.
+     * 
+     * @return La ruta del directorio actual.
+     */
     public String construir_ruta() {
         try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
             int inodo_actual = cwd_inodo;
@@ -740,6 +857,14 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: buscar_archivo_whereis
+     * 
+     * Descripcion: Busca recursivamente un archivo en el directorio actual.
+     * 
+     * @param nombreArchivo El nombre del archivo a buscar.
+     * @throws IOException Si ocurre un error al leer el directorio.
+     */
     public void buscar_archivo_whereis(String nombreArchivo) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
             int cwd_original = cwd_inodo; // guardar cwd actual
@@ -757,6 +882,18 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: buscar_recursivo
+     * 
+     * Descripcion: Busca recursivamente un archivo en el directorio actual.
+     * 
+     * @param archivo       El archivo donde se busca.
+     * @param inodo_actual  El inodo del directorio actual.
+     * @param nombreArchivo El nombre del archivo a buscar.
+     * @param visitados     Un conjunto de inodos que han sido visitados.
+     * @return El path del archivo si es encontrado, null si no es encontrado.
+     * @throws IOException Si ocurre un error al leer el directorio.
+     */
     private String buscar_recursivo(RandomAccessFile archivo, int inodo_actual, String nombreArchivo,
             Set<Integer> visitados)
             throws IOException {
@@ -797,6 +934,17 @@ public class GestorDisco {
         return null;
     }
 
+    /**
+     * Nombre: crear_enlace
+     * 
+     * Descripcion: Comando para crear un enlace simbolico a un archivo o
+     * directorio.
+     * 
+     * @param nombreEnlace El nombre del enlace que se quiere crear.
+     * @param rutaObjetivo La ruta del archivo o directorio al que se quiere crear
+     *                     un enlace.
+     * @throws IOException Si ocurre un error al crear el enlace.
+     */
     public void crear_enlace(String nombreEnlace, String rutaObjetivo) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
@@ -906,7 +1054,347 @@ public class GestorDisco {
         return true; // validación exitosa
     }
 
-    // Funciones para la tabla de archivos abiertos.
+    /**
+     * 
+     * Nombre: cambiar_propietario
+     * 
+     * Descripcion: Cambia el propietario de un archivo o directorio.
+     * 
+     * @param nuevoUsuario string que representa el nuevo usuario
+     * @param objetivo     ruta del archivo o directorio
+     * @param recursivo    true si se quiere aplicar a todos los archivos o
+     *                     directorios
+     *                     dentro del objetivo
+     * @param visitados    set de inodos visitados
+     * @throws IOException
+     */
+    public void cambiar_propietario(String nuevoUsuario, String objetivo, boolean recursivo, Set<Integer> visitados)
+            throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            // Obtener inodo del objetivo
+            int inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+
+            if (inodoObjetivo == -1) {
+                System.out.println("Error: no se encontro el archivo " + objetivo);
+                return;
+            }
+
+            if (inodoObjetivo == inodo_base) {
+                System.out.println("Error: no se puede cambiar el propietario del directorio raiz.");
+                return;
+            }
+
+            Inodo inodo = Inodo.leerInodo(archivo, inodoObjetivo);
+
+            // Validar permisos: solo root o dueño actual
+            if (usuario_actual.getUid() != 1 && usuario_actual.getUid() != inodo.propietario) {
+                System.out.println("Error: solo el propietario o root puede cambiar dueño.");
+                return;
+            }
+
+            // Buscar UID del nuevo usuario
+
+            GestorUsuarios gestor_usuarios = new GestorUsuarios();
+            try {
+                gestor_usuarios.cargar_usuarios(archivo);
+
+            } catch (Exception e) {
+                System.out.println("Error al cargar usuarios: " + e.getMessage());
+                return;
+            }
+
+            Usuario nuevo = gestor_usuarios.buscar_usuario(nuevoUsuario);
+            if (nuevo == null) {
+                System.out.println("Usuario no encontrado: " + nuevoUsuario);
+                return;
+            }
+
+            // Cambiar propietario
+            inodo.propietario = nuevo.getUid();
+            Inodo.escribirInodo(archivo, inodoObjetivo, inodo);
+
+            Inodo inodo_registrado = Inodo.leerInodo(archivo, inodoObjetivo);
+            System.out.println("Inodo registrado: " + inodo_registrado.propietario);
+            System.out.println("Propietario de " + objetivo + " cambiado a " + nuevoUsuario);
+
+            // Si es recursivo y es directorio, aplicar a todos sus hijos
+            if (recursivo && inodo.es_directorio) {
+                int bloqueDatos = inodo.bloques_asignados.get(0);
+                String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
+
+                for (String entrada : contenido.split("\n")) {
+                    if (!entrada.isBlank()) {
+                        String[] partes = entrada.split(";");
+                        if (partes.length >= 3) {
+                            String nombre = partes[0];
+                            // int hijoInodo = Integer.parseInt(partes[2]);
+                            if (nombre.equals(".") || nombre.equals(".."))
+                                continue;
+                            if (inodoObjetivo == inodo_base && nombre.equals("users"))
+                                continue;
+                            cambiar_propietario(nuevoUsuario, objetivo + "/" + nombre, true, visitados);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 
+     * Nombre: cambiar_grupo
+     * 
+     * Descripcion: Cambia el grupo de un archivo o directorio.
+     * 
+     * @param nuevoGrupo string que representa el nuevo grupo
+     * @param objetivo   ruta del archivo o directorio
+     * @param recursivo  true si se quiere aplicar a todos los archivos o
+     *                   directorios
+     *                   dentro del objetivo
+     * @param visitados  set de inodos visitados
+     * @throws IOException
+     */
+    public void cambiar_grupo(String nuevoGrupo, String objetivo, boolean recursivo, Set<Integer> visitados)
+            throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            int inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+
+            if (inodoObjetivo == -1) {
+                System.out.println("Error: no se encontró el archivo " + objetivo);
+                return;
+            }
+
+            if (inodoObjetivo == inodo_base) {
+                System.out.println("Error: no se puede cambiar el grupo del directorio raíz.");
+                return;
+            }
+
+            if (visitados.contains(inodoObjetivo))
+                return; // evitar ciclos
+            visitados.add(inodoObjetivo);
+
+            Inodo inodo = Inodo.leerInodo(archivo, inodoObjetivo);
+
+            // Validar permisos: solo root o dueño actual
+            if (usuario_actual.getUid() != 1 && usuario_actual.getUid() != inodo.propietario) {
+                System.out.println("Error: solo el propietario o root puede cambiar grupo.");
+                return;
+            }
+
+            // Buscar GID del nuevo grupo
+            GestorGrupos gestor_grupos = new GestorGrupos();
+            try {
+                gestor_grupos.cargar_grupos(archivo);
+            } catch (Exception e) {
+                System.out.println("Error al cargar grupos: " + e.getMessage());
+                return;
+            }
+
+            Grupo nuevo = gestor_grupos.buscar_grupo(nuevoGrupo);
+            if (nuevo == null) {
+                System.out.println("Grupo no encontrado: " + nuevoGrupo);
+                return;
+            }
+
+            // Cambiar grupo
+            inodo.grupo = nuevo.get_gid();
+            Inodo.escribirInodo(archivo, inodoObjetivo, inodo);
+
+            Inodo inodo_registrado = Inodo.leerInodo(archivo, inodoObjetivo);
+            System.out.println("Inodo registrado: grupo " + inodo_registrado.grupo);
+            System.out.println("Grupo de " + objetivo + " cambiado a " + nuevoGrupo);
+
+            // Si es recursivo y es directorio, aplicar a todos sus hijos
+            if (recursivo && inodo.es_directorio) {
+                int bloqueDatos = inodo.bloques_asignados.get(0);
+                String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
+
+                for (String entrada : contenido.split("\n")) {
+                    if (!entrada.isBlank()) {
+                        String[] partes = entrada.split(";");
+                        if (partes.length >= 3) {
+                            String nombre = partes[0];
+                            if (nombre.equals(".") || nombre.equals(".."))
+                                continue;
+                            if (inodoObjetivo == inodo_base && nombre.equals("users"))
+                                continue;
+
+                            cambiar_grupo(nuevoGrupo, objetivo + "/" + nombre, true, visitados);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 
+     * Nombre: cambiar_permisos
+     * 
+     * Descripcion: Cambia los permisos de un archivo o directorio.
+     * 
+     * @param permisosStr string de 2 digitos que representa los permisos
+     * @param objetivo    ruta del archivo o directorio
+     * @param recursivo   true si se quiere aplicar a todos los archivos o
+     *                    directorios
+     *                    dentro del objetivo
+     * @param visitados   set de inodos visitados
+     * @throws IOException
+     */
+    public void cambiar_permisos(String permisosStr, String objetivo, boolean recursivo, Set<Integer> visitados)
+            throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            int inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+
+            if (inodoObjetivo == -1) {
+                System.out.println("Error: no se encontró el archivo " + objetivo);
+                return;
+            }
+
+            if (inodoObjetivo == inodo_base) {
+                System.out.println("Error: no se puede cambiar permisos del directorio raíz.");
+                return;
+            }
+
+            // Para evitar los criclos.
+            if (visitados.contains(inodoObjetivo))
+                return;
+            visitados.add(inodoObjetivo);
+
+            Inodo inodo = Inodo.leerInodo(archivo, inodoObjetivo);
+
+            // Validar permisos: solo root o dueño actual
+            if (usuario_actual.getUid() != 1 && usuario_actual.getUid() != inodo.propietario) {
+                System.out.println("Error: solo el propietario o root puede cambiar permisos.");
+                return;
+            }
+
+            // Validar formato de permisos
+            if (permisosStr.length() != 2) {
+                System.out.println("Error: permisos invalidos. Debe ser un número de 2 digitos (ej. 77).");
+                return;
+            }
+
+            int propietario = Character.getNumericValue(permisosStr.charAt(0));
+            int grupo = Character.getNumericValue(permisosStr.charAt(1));
+
+            System.out.println("Propietario: " + propietario);
+            System.out.println("Grupo: " + grupo);
+
+            // Crear un lista que tenga los valores validos.
+            List<Integer> permisosValidos = Arrays.asList(0, 1, 2, 4);
+
+            // Validar por separado los valores de cada uno.
+            if (!permisosValidos.contains(propietario)) {
+                System.out.println("Error: los permisos validos para el propietario son 0, 1, 2 o 4.");
+                return;
+            }
+
+            if (!permisosValidos.contains(grupo)) {
+                System.out.println("Error: los permisos validos para el grupo son 0, 1, 2 o 4.");
+                return;
+            }
+
+            // Guardar permisos como entero (ej. 77)
+            inodo.permisos = Integer.parseInt(permisosStr);
+            Inodo.escribirInodo(archivo, inodoObjetivo, inodo);
+
+            System.out.println("Permisos de " + objetivo + " cambiados a " + permisosStr);
+
+            // Recursividad
+            if (recursivo && inodo.es_directorio) {
+                int bloqueDatos = inodo.bloques_asignados.get(0);
+                String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
+
+                for (String entrada : contenido.split("\n")) {
+                    if (!entrada.isBlank()) {
+                        String[] partes = entrada.split(";");
+                        if (partes.length >= 3) {
+                            String nombre = partes[0];
+                            if (nombre.equals(".") || nombre.equals(".."))
+                                continue;
+                            if (inodoObjetivo == inodo_base && nombre.equals("users"))
+                                continue;
+
+                            cambiar_permisos(permisosStr, objetivo + "/" + nombre, true, visitados);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Nombre: mostrar_FCB
+     * 
+     * Descripcion: Busca el inodo correspondiente al archivo y muestra su
+     * información
+     * de una manera amigable. Esta información incluye: nombre, inodo, propietario,
+     * grupo, permisos, fecha de creación, fecha de modificación, fecha de acceso,
+     * tamaño y los bloques asignados. Además, indica si el archivo está abierto o
+     * no.
+     * 
+     * @param nombreArchivo
+     * @throws IOException
+     */
+    public void mostrar_FCB(String nombreArchivo) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            // Buscar inodo del archivo
+            int inodoObjetivo = buscar_inodo_por_ruta(nombreArchivo);
+            System.out.println("Inodo objetivo: " + inodoObjetivo);
+            if (inodoObjetivo == -1) {
+                System.out.println("Error: archivo no encontrado " + nombreArchivo);
+                return;
+            }
+
+            Inodo inodo = Inodo.leerInodo(archivo, inodoObjetivo);
+            System.out.println("Inodo: " + inodo.nombre);
+            if (inodo.es_directorio) {
+                System.out.println("Error: viewFCB solo aplica a archivos, no directorios.");
+                return;
+            }
+
+            System.out.println("pass1");
+
+            // Consultar tabla de archivos abiertos
+            // GestorArchivos ga = get_archivos_disk();
+            // System.out.println("pass2");
+
+            // boolean abierto = false;
+            // for (Archivo e : ga.get_tabla()) {
+            // if (e.get_inodo() == inodo.numero && e.is_activo()) {
+            // abierto = true;
+            // break;
+            // }
+            // }
+            // System.out.println("pass3");
+
+            // Mostrar informacion del inodo
+            System.out.println("===== FCB del archivo =====");
+            System.out.println("Nombre: " + inodo.nombre);
+            System.out.println("Inodo: " + inodo.numero);
+            System.out.println("Propietario UID: " + inodo.propietario);
+            System.out.println("Grupo GID: " + inodo.grupo);
+            System.out.println("Permisos: " + inodo.permisos);
+            System.out.println("Fecha creacion: " + new Date(inodo.fecha_creacion));
+            System.out.println("Fecha modificacion: " + new Date(inodo.fecha_modificacion));
+            System.out.println("Fecha acceso: " + new Date(inodo.fecha_acceso));
+            System.out.println("Tamaño: " + inodo.tamano_utilizado + " bytes");
+            System.out.println("Bloques asignados: " + inodo.bloques_asignados);
+            // System.out.println("Estado: " + (abierto ? "Abierto" : "Cerrado"));
+            System.out.println("===========================");
+        }
+    }
+
+    /**
+     * Nombre: establecer_archivo_abierto
+     * 
+     * Descripcion: Establece un archivo como abierto.
+     * 
+     * @param nombre Nombre del archivo a establecer como abierto.
+     * @param modo   Modo en el que se debe establecer el archivo abierto.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
     public void establecer_archivo_abierto(String nombre, String modo) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
 
@@ -933,6 +1421,14 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: cerrar_archivo_abierto
+     * 
+     * Descripcion: Cierra un archivo abierto.
+     * 
+     * @param nombre Nombre del archivo a cerrar.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
     public void cerrar_archivo_abierto(String nombre) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
 
@@ -987,6 +1483,16 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: buscar_inodo_por_nombre
+     * 
+     * Descripcion: Busca un inodo por nombre en el directorio actual.
+     * 
+     * @param archivo Archivo de acceso aleatorio al disco.
+     * @param nombre  Nombre del archivo a buscar.
+     * @return El inodo encontrado o null si no existe.
+     * @throws IOException Si hay un error al leer el disco.
+     */
     public Inodo buscar_inodo_por_nombre(RandomAccessFile archivo, String nombre) throws IOException {
         // Leer el inodo del directorio actual
         Inodo directorio_actual = Inodo.leerInodo(archivo, cwd_inodo);
@@ -1014,6 +1520,88 @@ public class GestorDisco {
         return null; // no encontrado
     }
 
+    /**
+     * Nombre: buscar_inodo_por_ruta
+     * 
+     * Descripcion: Busca un inodo por una ruta especifica.
+     * 
+     * @param rutaObjetivo Ruta del inodo a buscar.
+     * @return El inodo encontrado o null si no existe.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
+    public int buscar_inodo_por_ruta(String rutaObjetivo) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            // Dividir la ruta en partes
+            String[] partes = rutaObjetivo.split("/");
+            int inodoActual = inodo_base; // normalmente el inodo base es /users
+
+            for (String parte : partes) {
+                if (parte.isBlank())
+                    continue; // ignorar vacíos por el primer "/"
+
+                Inodo dir = Inodo.leerInodo(archivo, inodoActual);
+                if (!dir.es_directorio) {
+                    throw new IOException("Ruta inválida: " + parte + " no es un directorio");
+                }
+
+                // Leer contenido del directorio actual
+                int bloqueDatos = dir.bloques_asignados.get(0);
+                String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
+
+                boolean encontrado = false;
+                for (String entrada : contenido.split("\n")) {
+                    if (!entrada.isBlank()) {
+                        String[] datos = entrada.split(";");
+                        if (datos.length >= 3) {
+                            String nombre = datos[0];
+                            int hijoInodo = Integer.parseInt(datos[2]);
+
+                            if (nombre.equals(parte)) {
+                                inodoActual = hijoInodo;
+                                encontrado = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!encontrado) {
+                    throw new IOException("Ruta no encontrada: " + parte);
+                }
+            }
+
+            return inodoActual; // número de inodo del objetivo
+        }
+    }
+
+    /**
+     * Nombre: get_archivos_disk
+     * 
+     * Descripcion: Obtiene la tabla de archivos abiertos.
+     * 
+     * @return GestorArchivos La tabla de archivos.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
+    public GestorArchivos get_archivos_disk() throws IOException {
+        GestorArchivos ga = new GestorArchivos();
+        try (RandomAccessFile archivo = new RandomAccessFile(GestorDisco.get_ruta(), "rw")) {
+            System.out.println("pass 11.1");
+            ga.cargar_tabla(archivo);
+            System.out.println("pass 11.2");
+        } catch (ClassNotFoundException e) {
+            throw new IOException("Error al cargar la tabla de archivos.");
+        }
+        return ga;
+    }
+
+    /**
+     * Nombre: debug_dump_bitmap
+     * 
+     * Descripcion: Muestra los primeros 'cantidad' bloques del bitmap.
+     * 
+     * @param cantidad Cantidad de bloques a mostrar.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
     public void debug_dump_bitmap(int cantidad) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
             archivo.seek(4 * tam_bloque);
@@ -1037,6 +1625,14 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: debug_dump_inodo
+     * 
+     * Descripcion: Muestra un inodo especificado.
+     * 
+     * @param inodoNumero Numero del inodo a mostrar.
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
     public void debug_dump_inodo(int inodoNumero) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
             // Leer el inodo

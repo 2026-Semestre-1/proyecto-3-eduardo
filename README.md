@@ -3,6 +3,6 @@
 ## Integrantes:
 ### [2023152827] [Eduardo Rojas Gómez]
 
-### Estado del proyecto: Escala de 1 a 5, 1 siendo completo y 5 muy malo
+### Estado del proyecto: 2
 ### Enlace del video: 
-Recordar que el video debe ser público y con sonido para ser visto por el profesor
+
