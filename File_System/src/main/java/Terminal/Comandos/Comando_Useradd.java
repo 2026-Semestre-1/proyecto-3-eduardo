@@ -35,6 +35,7 @@ public class Comando_Useradd implements Comando {
 
         if (!contrasena.equals(confirmacion)) {
             System.out.println("Las contraseñas no coinciden.");
+            sc.close();
             return;
         }
 
@@ -61,7 +62,7 @@ public class Comando_Useradd implements Comando {
             // Aqui se deberia de procesar la creacion de la carpeta del usuario.
             disco.crear_carpeta_usuario(archivo, user);
 
-            sc.close();
+            // sc.close();
         } catch (Exception e) {
             System.out.println("Error al crear usuario: " + e.getMessage());
         }

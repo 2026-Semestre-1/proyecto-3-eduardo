@@ -143,7 +143,7 @@ public class Terminal {
             System.out.println("No se especificó disco. Se procederá a formatear uno nuevo.");
             Comando_Format cmdFormat = new Comando_Format();
             cmdFormat.ejecutar(new String[] { "format" });
-            usuario_actual = "root";
+            // usuario_actual = "root";
             // iniciar_sesion();
             cargar_ultimo_usuario_activo();
             return true;
@@ -198,7 +198,7 @@ public class Terminal {
                 String pass = sc.nextLine().trim();
 
                 if (pass.equals(GestorDisco.get_usuario_actual().getContrasena())) {
-                    sc.close();
+                    // sc.close();
                     return true;
                 } else {
                     count--;

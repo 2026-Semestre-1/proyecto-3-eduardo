@@ -36,7 +36,7 @@ public class Comando_Less implements Comando {
                     System.out.println("Comando no reconocido. Use 'q' para salir.");
                 }
             }
-            sc.close();
+            // sc.close();
         } catch (IOException e) {
 
             System.out.println("Error al leer archivo: " + e.getMessage());

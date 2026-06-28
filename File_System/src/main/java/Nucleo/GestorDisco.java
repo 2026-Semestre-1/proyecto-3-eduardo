@@ -285,8 +285,15 @@ public class GestorDisco {
 
         System.out.println("Carpeta del usuario '" + usuario.getNombre() + "' creada en inodo " + numero_inodo);
 
+        // Guardamos la navegacion previa.
+        int inodo_actual_guardado = cwd_inodo;
+
         // Crear carpeta Home dentro del usuario
+        cwd_inodo = numero_inodo;
+
         crear_directorio("Home");
+        // Volvemos a la navegacion previa.
+        cwd_inodo = inodo_actual_guardado;
     }
 
     public void mostrar_info() {
