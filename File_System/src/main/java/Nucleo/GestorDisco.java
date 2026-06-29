@@ -643,8 +643,8 @@ public class GestorDisco {
 
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
 
-            // System.out.println("Mostrando Inodo Actual Pass 1--");
-            // debug_dump_inodo(inodoActual);
+            System.out.println("Mostrando Inodo Actual Pass 1--");
+            debug_dump_inodo(inodoActual);
 
             Inodo dirActual = Inodo.leerInodo(archivo, inodoActual);
 
@@ -710,66 +710,326 @@ public class GestorDisco {
         }
     }
 
+    // Seccion para la eliminacion de archivos o direcotiros.
+
+    public void eliminar_referencia_en_padre(RandomAccessFile archivo, int inodoPadre, int inodoHijo)
+            throws IOException {
+        Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+        int bloquePadre = padre.bloques_asignados.get(0);
+        String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadre, tam_bloque);
+
+        StringBuilder nuevoContenido = new StringBuilder();
+        for (String linea : contenidoPadre.split("\n")) {
+            if (!linea.isBlank()) {
+                String[] datos = linea.split(";");
+                if (datos.length >= 3) {
+                    int hijo = Integer.parseInt(datos[2]);
+                    if (hijo == inodoHijo) {
+                        // Omitir esta línea → elimina referencia
+                        continue;
+                    }
+                }
+                nuevoContenido.append(linea).append("\n");
+            }
+        }
+
+        manipular_contenido_bloques.escribirBloque(archivo, bloquePadre, nuevoContenido.toString().trim(), tam_bloque);
+    }
+
+    // Seccion para renombrar o mover archivo o directorios.
+
     public void mover_renombrar(String origen, String destino) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
-            int inodoOrigen = buscar_inodo_por_ruta(origen);
+            int inodoPadre = getCwdInodo();
+
+            // Resolver origen: puede ser nombre relativo o ruta completa
+            int inodoOrigen;
+            if (origen.contains("/")) {
+                inodoOrigen = buscar_inodo_por_ruta(origen);
+            } else {
+                inodoOrigen = buscar_inodo_en_directorio(archivo, inodoPadre, origen);
+            }
+
+            // Si no se encuentra que sea un archivo o directorio existente, asumimos que es
+            // un renombrado.
             if (inodoOrigen == -1) {
-                System.out.println("Error: no se encontró el archivo/directorio origen " + origen);
+                boolean renombrar = renombrar_archivo_directorio(archivo, origen, destino);
+                if (renombrar) {
+                    System.out.println("Archivo renombrado exitosamente.");
+                } else {
+                    System.out.println("Error al renombrar archivo.");
+                }
                 return;
             }
 
+            // Si se encuentra el inodo, entonces es un movimiento.
+
             Inodo inodoObj = Inodo.leerInodo(archivo, inodoOrigen);
 
-            // Validar permisos
-            if (usuario_actual.getUid() != 1) { // no es root
-                boolean esPropietario = usuario_actual.getUid() == inodoObj.propietario;
-                boolean esGrupo = usuario_actual.getGid() == inodoObj.grupo;
+            boolean resultado_movimiento = mover_archivo_directorio(archivo, inodoObj, destino);
+            if (resultado_movimiento) {
+                System.out.println("Elemento movido exitosamente.");
+            } else {
+                System.out.println("Error al mover elemento.");
+            }
+            return;
 
-                int permisosDueño = inodoObj.permisos / 10; // primer dígito
-                int permisosGrupo = inodoObj.permisos % 10; // segundo dígito
+            // // Validar permisos
+            // if (usuario_actual.getUid() != 1) { // no es root
+            // boolean esPropietario = usuario_actual.getUid() == inodoObj.propietario;
+            // boolean esGrupo = usuario_actual.getGid() == inodoObj.grupo;
+
+            // int permisosDueño = inodoObj.permisos / 10; // primer dígito
+            // int permisosGrupo = inodoObj.permisos % 10; // segundo dígito
+
+            // if (esPropietario && permisosDueño != 7) {
+            // System.out.println("Error: el propietario no tiene permisos suficientes.");
+            // return;
+            // }
+            // if (esGrupo && permisosGrupo != 7) {
+            // System.out.println("Error: el grupo no tiene permisos suficientes.");
+            // return;
+            // }
+            // if (!esPropietario && !esGrupo) {
+            // System.out.println("Error: usuario sin permisos para mover/renombrar.");
+            // return;
+            // }
+            // }
+
+            // // Resolver destino
+            // int inodoDestino;
+            // if (destino.contains("/")) {
+            // inodoDestino = buscar_inodo_por_ruta(destino);
+            // } else {
+            // inodoDestino = buscar_inodo_en_directorio(archivo, inodoPadre, destino);
+            // }
+
+            // if (inodoDestino != -1) {
+            // Inodo destinoInodo = Inodo.leerInodo(archivo, inodoDestino);
+            // if (!destinoInodo.es_directorio) {
+            // System.out.println("Error: el destino debe ser un directorio.");
+            // return;
+            // }
+
+            // // Validar que no se mueva un padre dentro de un hijo
+            // if (es_descendiente(inodoDestino, inodoOrigen, archivo)) {
+            // System.out.println("Error: no se puede mover un directorio padre dentro de su
+            // hijo.");
+            // return;
+            // }
+
+            // // Movimiento: actualizar inodo padre
+            // inodoObj.inodo_padre = destinoInodo.numero;
+            // Inodo.escribirInodo(archivo, inodoOrigen, inodoObj);
+            // System.out.println("Elemento movido: " + origen + " → " + destino);
+            // } else {
+            // // Renombrado
+            // String[] partes = destino.split("/");
+            // String nuevoNombre = partes[partes.length - 1];
+            // inodoObj.nombre = nuevoNombre;
+            // Inodo.escribirInodo(archivo, inodoDestino, inodoObj);
+            // System.out.println("Elemento renombrado: " + origen + " → " + nuevoNombre);
+            // }
+        }
+    }
+
+    /**
+     * Nombre: renombrar_archivo_directorio
+     * 
+     * Descripcion: Renombra un archivo o directorio.
+     * 
+     * @param archivo El archivo que contiene los datos.
+     * @param origen  El nombre del archivo o directorio a renombrar.
+     * @param destino El nuevo nombre del archivo o directorio.
+     * @return true si se renombro correctamente, false en caso contrario
+     * @throws IOException Si ocurre un error al leer el archivo.
+     */
+    public boolean renombrar_archivo_directorio(RandomAccessFile archivo, String origen, String destino) {
+
+        // Obtener el inodo que vamos a renonbrar.
+        try {
+            int inodo_destino;
+            if (destino.contains("/")) {
+                inodo_destino = buscar_inodo_por_ruta(destino);
+            } else {
+                inodo_destino = buscar_inodo_en_directorio(archivo, cwd_inodo, destino);
+            }
+
+            // Si el inodo no se encuentra, no existe.
+            if (inodo_destino == -1) {
+                System.out.println("Error: el inodo no existe.");
+                return false;
+            }
+
+            Inodo inodo_obj = Inodo.leerInodo(archivo, inodo_destino);
+
+            // Validar permisos del usuario cuando no es root.
+            if (usuario_actual.getUid() != 1) {
+                boolean esPropietario = usuario_actual.getUid() == inodo_obj.propietario;
+                boolean esGrupo = usuario_actual.getGid() == inodo_obj.grupo;
+
+                int permisosDueño = inodo_obj.permisos / 10; // primer dígito
+                int permisosGrupo = inodo_obj.permisos % 10; // segundo dígito
 
                 if (esPropietario && permisosDueño != 7) {
                     System.out.println("Error: el propietario no tiene permisos suficientes.");
-                    return;
+                    return false;
                 }
                 if (esGrupo && permisosGrupo != 7) {
                     System.out.println("Error: el grupo no tiene permisos suficientes.");
-                    return;
+                    return false;
                 }
                 if (!esPropietario && !esGrupo) {
                     System.out.println("Error: usuario sin permisos para mover/renombrar.");
-                    return;
+                    return false;
                 }
             }
 
-            // Verificar si destino es un directorio existente
-            int inodoDestino = buscar_inodo_por_ruta(destino);
+            // Renombrar el archivo o directorio
+            String[] partes = origen.split("/");
+            String nuevo_nombre = partes[partes.length - 1];
 
-            if (inodoDestino != -1) {
-                Inodo destinoInodo = Inodo.leerInodo(archivo, inodoDestino);
-                if (!destinoInodo.es_directorio) {
-                    System.out.println("Error: el destino debe ser un directorio.");
-                    return;
+            inodo_obj.nombre = nuevo_nombre;
+            Inodo.escribirInodo(archivo, inodo_destino, inodo_obj);
+            // System.out.println("Elemento renombrado: " + destino + " -> " +
+            // nuevo_nombre);
+
+            // Ahora hay que cambiar el nombre registrado en el padre.
+            int inodoPadre = inodo_obj.inodo_padre;
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+            // Obtener el contenido de todos los bloques asociados.
+            int bloquePadre = padre.bloques_asignados.get(0);
+            String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadre, tam_bloque);
+
+            StringBuilder nuevoContenido = new StringBuilder();
+            for (String linea : contenidoPadre.split("\n")) {
+                if (!linea.isBlank()) {
+                    String[] datos = linea.split(";");
+                    if (datos.length >= 3) {
+                        int inodoHijo = Integer.parseInt(datos[2]);
+                        if (inodoHijo == inodo_destino) {
+                            // Reemplazar nombre
+                            nuevoContenido.append(nuevo_nombre).append(";").append(datos[1]).append(";")
+                                    .append(datos[2]).append("\n");
+                        } else {
+                            nuevoContenido.append(linea).append("\n");
+                        }
+                    } else {
+                        nuevoContenido.append(linea).append("\n");
+                    }
                 }
-
-                // Validar que no se mueva un padre dentro de un hijo
-                if (origen.startsWith(destino)) {
-                    System.out.println("Error: no se puede mover un directorio padre dentro de su hijo.");
-                    return;
-                }
-
-                // Movimiento: actualizar inodo padre
-                inodoObj.inodo_padre = destinoInodo.numero;
-                Inodo.escribirInodo(archivo, inodoOrigen, inodoObj);
-                System.out.println("Elemento movido: " + origen + " → " + destino);
-            } else {
-                // Renombrado
-                String[] partes = destino.split("/");
-                String nuevoNombre = partes[partes.length - 1];
-                inodoObj.nombre = nuevoNombre;
-                Inodo.escribirInodo(archivo, inodoOrigen, inodoObj);
-                System.out.println("Elemento renombrado: " + origen + " → " + nuevoNombre);
             }
+
+            // Escribir bloque actualizado
+            manipular_contenido_bloques.escribirBloque(archivo, bloquePadre, nuevoContenido.toString().trim(),
+                    tam_bloque);
+
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error al buscar el inodo: " + e.getMessage());
+            return false;
+        }
+
+    }
+
+    /**
+     * Nombre: mover_archivo_directorio
+     * 
+     * Descripcion: Mueve un archivo o directorio de un lugar a otro.
+     * 
+     * @param archivo El archivo que contiene los datos.
+     * @param origen  El inodo del archivo o directorio a mover.
+     * @param destino El destino al que se va a mover el archivo o directorio.
+     * @return true si se movio correctamente, false en caso contrario.
+     */
+    public boolean mover_archivo_directorio(RandomAccessFile archivo, Inodo origen, String destino) {
+        try {
+            System.out.println("GestorDisco (mover_archivo_directorio)");
+            System.out.println("Origen: " + origen.nombre + " (inodo " + origen.numero + ")");
+            System.out.println("Destino: " + destino);
+
+            // Buscar inodo destino
+            int inodoDestino = destino.contains("/")
+                    ? buscar_inodo_por_ruta(destino)
+                    : buscar_inodo_en_directorio(archivo, cwd_inodo, destino);
+
+            System.out.println("Pass 2: Inodo destino: " + inodoDestino);
+
+            if (inodoDestino == -1) {
+                System.out.println("Error: el directorio destino no existe.");
+                return false;
+            }
+
+            System.out.println("Pass 3:");
+
+            Inodo destinoInodo = Inodo.leerInodo(archivo, inodoDestino);
+
+            System.out.println("Pass 4:");
+
+            // Validar que destino sea directorio
+            if (!destinoInodo.es_directorio) {
+                System.out.println("Error: no se puede mover a un archivo.");
+                return false;
+            }
+
+            System.out.println("Pass 5:");
+
+            // Validar que no se mueva padre dentro de hijo
+            if (es_descendiente(inodoDestino, origen.numero, archivo)) {
+                System.out.println("Error: no se puede mover un directorio padre dentro de su hijo.");
+                return false;
+            }
+
+            System.out.println("Pass 6:");
+            // Validar permisos para el acceso.
+            if (usuario_actual.getUid() != 1) {
+                boolean esPropietario = usuario_actual.getUid() == origen.propietario;
+                boolean esGrupo = usuario_actual.getGid() == origen.grupo;
+
+                int permisosDueño = origen.permisos / 10;
+                int permisosGrupo = origen.permisos % 10;
+
+                if (esPropietario && permisosDueño != 7) {
+                    System.out.println("Error: el propietario no tiene permisos suficientes.");
+                    return false;
+                }
+                if (esGrupo && permisosGrupo != 7) {
+                    System.out.println("Error: el grupo no tiene permisos suficientes.");
+                    return false;
+                }
+                if (!esPropietario && !esGrupo) {
+                    System.out.println("Error: usuario sin permisos para mover.");
+                    return false;
+                }
+            }
+
+            System.out.println("Pass 7:");
+
+            // Eliminamos la referencia en el padre original.
+            eliminar_referencia_en_padre(archivo, origen.inodo_padre, origen.numero);
+
+            // Actualizamos el inodo padre el inodo que movimos.
+            origen.inodo_padre = destinoInodo.numero;
+            Inodo.escribirInodo(archivo, origen.numero, origen);
+
+            // Agregar la referencia en el nuevo padre.
+            int bloqueDestino = destinoInodo.bloques_asignados.get(0);
+            String contenidoDestino = manipular_contenido_bloques.leerBloque(archivo, bloqueDestino, tam_bloque);
+
+            String tipo = origen.es_directorio ? "dir" : "file";
+            String nuevaEntrada = origen.nombre + ";" + tipo + ";" + origen.numero;
+
+            contenidoDestino = contenidoDestino + "\n" + nuevaEntrada;
+            manipular_contenido_bloques.escribirBloque(archivo, bloqueDestino, contenidoDestino.trim(), tam_bloque);
+
+            System.out.println("Elemento movido: " + origen.nombre + " -> " + destinoInodo.nombre);
+            return true;
+
+        } catch (Exception e) {
+            System.out.println("Error al mover: " + e.getMessage());
+            return false;
         }
     }
 
@@ -1340,7 +1600,12 @@ public class GestorDisco {
     public void mostrar_FCB(String nombreArchivo) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             // Buscar inodo del archivo
-            int inodoObjetivo = buscar_inodo_por_ruta(nombreArchivo);
+            int inodoObjetivo;
+            if (nombreArchivo.contains("/")) {
+                inodoObjetivo = buscar_inodo_por_ruta(nombreArchivo);
+            } else {
+                inodoObjetivo = buscar_inodo_en_directorio(archivo, cwd_inodo, nombreArchivo);
+            }
             System.out.println("Inodo objetivo: " + inodoObjetivo);
             if (inodoObjetivo == -1) {
                 System.out.println("Error: archivo no encontrado " + nombreArchivo);
@@ -1518,6 +1783,54 @@ public class GestorDisco {
         }
 
         return null; // no encontrado
+    }
+
+    /**
+     * Nombre: buscar_inodo_en_directorio
+     * 
+     * Descripcion: Busca un inodo en un directorio especifico.
+     * 
+     * @param archivo    Archivo de acceso aleatorio al disco.
+     * @param inodoPadre Inodo del directorio padre.
+     * @param nombre     Nombre del archivo a buscar.
+     * @return El inodo encontrado o null si no existe.
+     * @throws IOException Si hay un error al leer el disco.
+     */
+    private int buscar_inodo_en_directorio(RandomAccessFile archivo, int inodoPadre, String nombre) throws IOException {
+        Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+        int bloqueDatos = padre.bloques_asignados.get(0);
+        String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
+
+        for (String entrada : contenido.split("\n")) {
+            if (!entrada.isBlank()) {
+                String[] partes = entrada.split(";");
+                if (partes.length >= 3 && partes[0].equals(nombre)) {
+                    return Integer.parseInt(partes[2]);
+                }
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Nombre: es_descendiente
+     * 
+     * Descripcion: Verifica si un inodo es descendiente de otro.
+     * 
+     * @param posibleHijo  El inodo que se sospecha es descendiente.
+     * @param posiblePadre El inodo que se sospecha es padre.
+     * @param archivo      El archivo de acceso aleatorio al disco.
+     * @return true si el inodo es descendiente, false en caso contrario.
+     * @throws IOException Si hay un error al leer el disco.
+     */
+    private boolean es_descendiente(int posibleHijo, int posiblePadre, RandomAccessFile archivo) throws IOException {
+        Inodo hijo = Inodo.leerInodo(archivo, posibleHijo);
+        while (hijo.inodo_padre != 20) {
+            if (hijo.inodo_padre == posiblePadre)
+                return true;
+            hijo = Inodo.leerInodo(archivo, hijo.inodo_padre);
+        }
+        return false;
     }
 
     /**
