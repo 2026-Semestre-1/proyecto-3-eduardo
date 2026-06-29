@@ -106,7 +106,7 @@ public class Comando_Note implements Comando {
             System.out.println(contenidoActual.toString());
             System.out.println("Edite el contenido, termine con Ctrl+X en una línea aparte.");
 
-            disco.establecer_archivo_abierto(nombreArchivo, "rw");
+            // disco.establecer_archivo_abierto(nombreArchivo, "rw");
 
             // Editor interactivo
             Scanner sc = new Scanner(System.in);
@@ -114,7 +114,7 @@ public class Comando_Note implements Comando {
             while (true) {
                 String linea = sc.nextLine();
                 if (linea.equalsIgnoreCase("\u0018") || linea.equalsIgnoreCase("Ctrl+X")) {
-                    disco.cerrar_archivo_abierto(nombreArchivo);
+                    // disco.cerrar_archivo_abierto(nombreArchivo);
                     break;
                 }
                 nuevoContenido.append(linea).append("\n");

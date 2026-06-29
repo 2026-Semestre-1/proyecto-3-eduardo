@@ -44,39 +44,104 @@ public class GestorDisco {
 
     private static Usuario usuario_actual;
 
+    /**
+     * Nombre: GestorDisco
+     * 
+     * Descripcion: Constructor de la clase GestorDisco.
+     * 
+     * @param ruta La ruta del disco.
+     */
     public GestorDisco(String ruta) {
         this.ruta = ruta;
 
     }
 
+    /**
+     * Nombre: getCwdInodo
+     * 
+     * Descripcion: Obtiene el inodo actual.
+     * 
+     * @return El inodo actual.
+     */
     public int getCwdInodo() {
         return cwd_inodo;
     }
 
+    /**
+     * Nombre: setCwdInodo
+     * 
+     * Descripcion: Establece el inodo actual.
+     * 
+     * @param cwd_inodo El inodo actual.
+     */
     public void setCwdInodo(int cwd_inodo) {
         this.cwd_inodo = cwd_inodo;
     }
 
+    /**
+     * Nombre: set_ruta
+     * 
+     * Descripcion: Establece la ruta del disco.
+     * 
+     * @param ruta La ruta del disco.
+     */
     public static void set_ruta(String ruta) {
         GestorDisco.ruta = ruta;
     }
 
+    /**
+     * Nombre: get_ruta
+     * 
+     * Descripcion: Obtiene la ruta del disco.
+     * 
+     * @return La ruta del disco.
+     */
     public static String get_ruta() {
         return ruta;
     }
 
+    /**
+     * Nombre: get_tam_bloque
+     * 
+     * Descripcion: Obtiene el tamaño del bloque.
+     * 
+     * @return El tamaño del bloque.
+     */
     public int get_tam_bloque() {
         return tam_bloque;
     }
 
+    /**
+     * Nombre: get_usuario_actual
+     * 
+     * Descripcion: Obtiene el usuario actual.
+     * 
+     * @return El usuario actual.
+     */
     public static Usuario get_usuario_actual() {
         return usuario_actual;
     }
 
+    /**
+     * Nombre: set_usuario_actual
+     * 
+     * Descripcion: Establece el usuario actual.
+     * 
+     * @param usuario_actual El usuario actual.
+     */
     public static void set_usuario_actual(Usuario usuario_actual) {
         GestorDisco.usuario_actual = usuario_actual;
     }
 
+    /**
+     * Nombre: formatear_disco
+     * 
+     * Descripcion: Formatea el disco.
+     * 
+     * @param tam_mb                 El tamaño del disco en megabytes.
+     * @param nombre_contrasena_root La contraseña del usuario root.
+     * @throws IOException Si hay un error al formatear el disco.
+     */
     public void formatear_disco(int tam_mb, String nombre_contrasena_root) throws IOException {
         int tam_bytes = tam_mb * 1024 * 1024;
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
@@ -193,6 +258,14 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: crear_carpeta_users
+     * 
+     * Descripcion: Crea la carpeta users en el sistema de archivos.
+     * 
+     * @param archivo El archivo del sistema de archivos.
+     * @throws IOException Si hay un error al crear la carpeta users.
+     */
     public void crear_carpeta_users(RandomAccessFile archivo) throws IOException {
         // Obtener inodo padre (root)
         int inodo_padre = inodo_base;
@@ -243,6 +316,15 @@ public class GestorDisco {
         System.out.println("Carpeta 'users/' creada en inodo " + numero_inodo);
     }
 
+    /**
+     * Nombre: crear_carpeta_usuario
+     * 
+     * Descripcion: Crea la carpeta de un usuario en el sistema de archivos.
+     * 
+     * @param archivo El archivo del sistema de archivos.
+     * @param usuario El usuario que se va a crear la carpeta.
+     * @throws IOException Si hay un error al crear la carpeta del usuario.
+     */
     public void crear_carpeta_usuario(RandomAccessFile archivo, Usuario usuario) throws IOException {
         // Padre es la carpeta users
         int inodo_padre = inodo_base;
@@ -265,7 +347,7 @@ public class GestorDisco {
                 true,
                 bloques_asignados,
                 inodo_padre,
-                700);
+                77);
         Inodo.escribirInodo(archivo, numero_inodo, carpeta_usuario);
 
         // Inicializar bloque de datos
@@ -309,7 +391,14 @@ public class GestorDisco {
         usuario_actual = anterior;
     }
 
-    public void mostrar_info() {
+    /**
+     * Nombre: mostrar_info
+     * 
+     * Descripcion: Muestra la información del sistema de archivos.
+     * 
+     * @throws IOException Si hay un error al mostrar la información.
+     */
+    public void mostrar_info() throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "r")) {
             // El superbloque está en el bloque 2
             archivo.seek(2 * tam_bloque);
@@ -349,10 +438,25 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: crear_directorio
+     * 
+     * Descripcion: Crea un directorio en el sistema de archivos.
+     * 
+     * @param nombre El nombre del directorio a crear.
+     * @throws IOException Si hay un error al crear el directorio.
+     */
     public void crear_directorio(String nombre) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
             int inodoPadre = cwd_inodo;
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+            // Validar si el usuario actual tiene permisos para trabajar en este directorio.
+            boolean tiene_permisos = validar_permisos(padre, usuario_actual, "write");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para crear directorios en esta ubicacion.");
+            }
 
             // System.out.println("Mostrando Inodo Padre Pass 1--");
             // debug_dump_inodo(inodoPadre);
@@ -388,7 +492,7 @@ public class GestorDisco {
                     true, // es directorio
                     bloques_asignados, // bloques asignados
                     inodoPadre, // inodo padre
-                    777 // permisos
+                    77 // permisos
             );
 
             Inodo.escribirInodo(archivo, inodoNuevo, nuevo);
@@ -399,7 +503,6 @@ public class GestorDisco {
             archivo.seek(bloque_contenido * tam_bloque);
             archivo.write(contenido.getBytes(StandardCharsets.UTF_8));
 
-            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
             if (padre.bloques_asignados == null || padre.bloques_asignados.isEmpty()) {
                 throw new IOException("El inodo padre no tiene bloques asignados.");
             }
@@ -430,11 +533,27 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: crear_archivo
+     * 
+     * Descripcion: Crea un archivo en el sistema de archivos.
+     * 
+     * @param nombre El nombre del archivo a crear.
+     * @throws IOException Si hay un error al crear el archivo.
+     */
     public void crear_archivo(String nombre)
             throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
             int inodoPadre = getCwdInodo();
+
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+            // Validar si el usuario actual tiene permisos para trabajar en este directorio.
+            boolean tiene_permisos = validar_permisos(padre, usuario_actual, "write");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para crear archivos en esta ubicacion.");
+            }
 
             // Leer superbloque
             archivo.seek(2 * tam_bloque);
@@ -469,7 +588,7 @@ public class GestorDisco {
                     false, // es_directorio = false
                     bloques_asignados, // bloques asignados
                     inodoPadre, // inodo padre
-                    777 // permisos
+                    77 // permisos
             );
             Inodo.escribirInodo(archivo, inodoNuevo, nuevo);
 
@@ -477,7 +596,6 @@ public class GestorDisco {
             manipular_contenido_bloques.escribirBloque(archivo, bloque_contenido, "", tam_bloque);
 
             // Leer inodo padre
-            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
 
             // Actualizar contenido del directorio padre
             int bloquePadreDatos = padre.bloques_asignados.get(0);
@@ -496,13 +614,29 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: escribir_archivo
+     * 
+     * Descripcion: Escribe contenido en un archivo.
+     * 
+     * @param nombreArchivo El nombre del archivo a escribir.
+     * @param contenido     El contenido a escribir en el archivo.
+     * @throws IOException Si hay un error al escribir en el archivo.
+     */
     public void escribir_archivo(String nombreArchivo, String contenido) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
             int inodoPadre = getCwdInodo();
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+            // Validar si el usuario actual tiene permisos para trabajar en este directorio.
+            // boolean tiene_permisos = validar_permisos(padre, usuario_actual, "write");
+            // if (!tiene_permisos) {
+            // throw new IOException("No tienes permisos para escribir en esta ubicacion.");
+            // }
 
             // Buscar el inodo del archivo dentro del directorio actual
-            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+            // Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
             int bloquePadreDatos = padre.bloques_asignados.get(0);
             String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadreDatos, tam_bloque);
 
@@ -525,6 +659,10 @@ public class GestorDisco {
             // Leer inodo del archivo
             Inodo archivoInodo = Inodo.leerInodo(archivo, inodoArchivo);
 
+            boolean tiene_permisos = validar_permisos(archivoInodo, usuario_actual, "write");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para leer este directorio.");
+            }
             // Escribir contenido en el primer bloque asignado
             int bloqueDatos = archivoInodo.bloques_asignados.get(0);
             manipular_contenido_bloques.escribirBloque(archivo, bloqueDatos, contenido, tam_bloque);
@@ -541,13 +679,24 @@ public class GestorDisco {
         }
     }
 
+    /**
+     * Nombre: leer_archivo
+     * 
+     * Descripcion: Lee el contenido de un archivo.
+     * 
+     * @param nombreArchivo El nombre del archivo a leer.
+     * @return El contenido del archivo.
+     * @throws IOException Si hay un error al leer el archivo.
+     */
     public String leer_archivo(String nombreArchivo) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
 
             int inodoPadre = getCwdInodo();
 
-            // Buscar el inodo del archivo dentro del directorio actual
             Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+            // Buscar el inodo del archivo dentro del directorio actual
+            // Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
             int bloquePadreDatos = padre.bloques_asignados.get(0);
             String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadreDatos, tam_bloque);
 
@@ -573,6 +722,11 @@ public class GestorDisco {
             // Leer inodo del archivo
             Inodo archivoInodo = Inodo.leerInodo(archivo, inodoArchivo);
 
+            // Validar permisos
+            boolean tiene_permisos = validar_permisos(archivoInodo, usuario_actual, "read");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para leer este directorio.");
+            }
             // Leer contenido del primer bloque asignado
             int bloqueDatos = archivoInodo.bloques_asignados.get(0);
             String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
@@ -717,9 +871,27 @@ public class GestorDisco {
 
     }
 
+    /**
+     * Nombre: eliminar
+     * 
+     * Descripcion: Elimina un archivo o directorio.
+     * 
+     * @param archivo       El archivo a eliminar.
+     * @param inodoObjetivo El inodo del archivo a eliminar.
+     * @param recursivo     Si se debe eliminar de forma recursiva.
+     * @return true si se elimino el archivo, false en caso contrario.
+     * @throws IOException Si hay un error al eliminar el archivo.
+     */
     public boolean eliminar(RandomAccessFile archivo, int inodoObjetivo, boolean recursivo) {
         try {
             Inodo inodo = Inodo.leerInodo(archivo, inodoObjetivo);
+            // Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+
+            // Validar si el usuario actual tiene permisos para trabajar en este directorio.
+            boolean tiene_permisos = validar_permisos(inodo, usuario_actual, "write");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para eliminar este archivo/directorio.");
+            }
 
             System.out.println("Pass 4");
             // Si es directorio y recursivo, eliminar contenido
@@ -851,6 +1023,12 @@ public class GestorDisco {
 
             Inodo inodoObj = Inodo.leerInodo(archivo, inodoOrigen);
 
+            // Validar permisos del usuario
+            boolean tiene_permisos = validar_permisos(inodoObj, usuario_actual, "write");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para mover este archivo/directorio.");
+            }
+
             boolean resultado_movimiento = mover_archivo_directorio(archivo, inodoObj, destino);
             if (resultado_movimiento) {
                 System.out.println("Elemento movido exitosamente.");
@@ -892,6 +1070,11 @@ public class GestorDisco {
             Inodo inodo_obj = Inodo.leerInodo(archivo, inodo_destino);
 
             // Validar permisos del usuario cuando no es root.
+            boolean tiene_permisos = validar_permisos(inodo_obj, usuario_actual, "write");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para renombrar este archivo/directorio.");
+            }
+
             if (usuario_actual.getUid() != 1) {
                 boolean esPropietario = usuario_actual.getUid() == inodo_obj.propietario;
                 boolean esGrupo = usuario_actual.getGid() == inodo_obj.grupo;
@@ -973,27 +1156,28 @@ public class GestorDisco {
      */
     public boolean mover_archivo_directorio(RandomAccessFile archivo, Inodo origen, String destino) {
         try {
-            System.out.println("GestorDisco (mover_archivo_directorio)");
-            System.out.println("Origen: " + origen.nombre + " (inodo " + origen.numero + ")");
-            System.out.println("Destino: " + destino);
+            // System.out.println("GestorDisco (mover_archivo_directorio)");
+            // System.out.println("Origen: " + origen.nombre + " (inodo " + origen.numero +
+            // ")");
+            // System.out.println("Destino: " + destino);
 
             // Buscar inodo destino
             int inodoDestino = destino.contains("/")
                     ? buscar_inodo_por_ruta(destino)
                     : buscar_inodo_en_directorio(archivo, cwd_inodo, destino);
 
-            System.out.println("Pass 2: Inodo destino: " + inodoDestino);
+            // System.out.println("Pass 2: Inodo destino: " + inodoDestino);
 
             if (inodoDestino == -1) {
                 System.out.println("Error: el directorio destino no existe.");
                 return false;
             }
 
-            System.out.println("Pass 3:");
+            // System.out.println("Pass 3:");
 
             Inodo destinoInodo = Inodo.leerInodo(archivo, inodoDestino);
 
-            System.out.println("Pass 4:");
+            // System.out.println("Pass 4:");
 
             // Validar que destino sea directorio
             if (!destinoInodo.es_directorio) {
@@ -1009,7 +1193,7 @@ public class GestorDisco {
                 return false;
             }
 
-            System.out.println("Pass 6:");
+            // System.out.println("Pass 6:");
             // Validar permisos para el acceso.
             if (usuario_actual.getUid() != 1) {
                 boolean esPropietario = usuario_actual.getUid() == origen.propietario;
@@ -1032,7 +1216,7 @@ public class GestorDisco {
                 }
             }
 
-            System.out.println("Pass 7:");
+            // System.out.println("Pass 7:");
 
             // Eliminamos la referencia en el padre original.
             eliminar_referencia_en_padre(archivo, origen.inodo_padre, origen.numero);
@@ -1073,6 +1257,13 @@ public class GestorDisco {
         try (RandomAccessFile archivo = new RandomAccessFile(get_ruta(), "rw")) {
 
             Inodo actual = Inodo.leerInodo(archivo, cwd_inodo);
+
+            // Validar permisos del usuario
+            // boolean tiene_permisos = validar_permisos(actual, usuario_actual, "execute");
+            // if (!tiene_permisos) {
+            // throw new IOException("No tienes permisos para cambiar al directorio
+            // especificado.");
+            // }
 
             if (path.equals("..")) {
                 // Retroceder al padre
@@ -1246,6 +1437,13 @@ public class GestorDisco {
 
             int inodoPadre = getCwdInodo();
 
+            // Validar permisos del usuario
+            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
+            boolean tiene_permisos = validar_permisos(padre, usuario_actual, "write");
+            if (!tiene_permisos) {
+                throw new IOException("No tienes permisos para crear el enlace.");
+            }
+
             // Leer superbloque
             archivo.seek(2 * tam_bloque);
             byte[] buffer = new byte[tam_bloque];
@@ -1286,7 +1484,6 @@ public class GestorDisco {
             manipular_contenido_bloques.escribirBloque(archivo, bloque_contenido, rutaObjetivo, tam_bloque);
 
             // Actualizar directorio padre
-            Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
             int bloquePadreDatos = padre.bloques_asignados.get(0);
             String contenidoPadre = manipular_contenido_bloques.leerBloque(archivo, bloquePadreDatos, tam_bloque);
             if (!contenidoPadre.endsWith("\n")) {
@@ -1359,7 +1556,12 @@ public class GestorDisco {
             throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             // Obtener inodo del objetivo
-            int inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+            int inodoObjetivo;
+            if (objetivo.contains("/")) {
+                inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+            } else {
+                inodoObjetivo = buscar_inodo_en_directorio(archivo, cwd_inodo, objetivo);
+            }
 
             if (inodoObjetivo == -1) {
                 System.out.println("Error: no se encontro el archivo " + objetivo);
@@ -1444,7 +1646,12 @@ public class GestorDisco {
     public void cambiar_grupo(String nuevoGrupo, String objetivo, boolean recursivo, Set<Integer> visitados)
             throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
-            int inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+            int inodoObjetivo;
+            if (objetivo.contains("/")) {
+                inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+            } else {
+                inodoObjetivo = buscar_inodo_en_directorio(archivo, cwd_inodo, objetivo);
+            }
 
             if (inodoObjetivo == -1) {
                 System.out.println("Error: no se encontró el archivo " + objetivo);
@@ -1531,8 +1738,12 @@ public class GestorDisco {
     public void cambiar_permisos(String permisosStr, String objetivo, boolean recursivo, Set<Integer> visitados)
             throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
-            int inodoObjetivo = buscar_inodo_por_ruta(objetivo);
-
+            int inodoObjetivo;
+            if (objetivo.contains("/")) {
+                inodoObjetivo = buscar_inodo_por_ruta(objetivo);
+            } else {
+                inodoObjetivo = buscar_inodo_en_directorio(archivo, cwd_inodo, objetivo);
+            }
             if (inodoObjetivo == -1) {
                 System.out.println("Error: no se encontró el archivo " + objetivo);
                 return;
@@ -1569,16 +1780,16 @@ public class GestorDisco {
             System.out.println("Grupo: " + grupo);
 
             // Crear un lista que tenga los valores validos.
-            List<Integer> permisosValidos = Arrays.asList(0, 1, 2, 4);
+            List<Integer> permisosValidos = Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7);
 
             // Validar por separado los valores de cada uno.
             if (!permisosValidos.contains(propietario)) {
-                System.out.println("Error: los permisos validos para el propietario son 0, 1, 2 o 4.");
+                System.out.println("Error: los permisos validos para el propietario son 0, 1, 2, 3, 4, 5, 6 o 7.");
                 return;
             }
 
             if (!permisosValidos.contains(grupo)) {
-                System.out.println("Error: los permisos validos para el grupo son 0, 1, 2 o 4.");
+                System.out.println("Error: los permisos validos para el grupo son 0, 1, 2, 3, 4, 5, 6 o 7.");
                 return;
             }
 
@@ -1952,6 +2163,59 @@ public class GestorDisco {
             hijo = Inodo.leerInodo(archivo, hijo.inodo_padre);
         }
         return false;
+    }
+
+    /**
+     * Nombre: validar_permisos
+     * 
+     * Descripcion: Valida si un usuario tiene permisos para realizar una operacion
+     * en un inodo.
+     * 
+     * @param inodo     El inodo del archivo o directorio.
+     * @param usuario   El usuario que realiza la operacion.
+     * @param operacion La operacion a realizar (read, write, execute).
+     * @return true si el usuario tiene permisos, false en caso contrario.
+     * @throws IOException Si hay un error al leer el disco.
+     */
+    public boolean validar_permisos(Inodo inodo, Usuario usuario, String operacion) {
+        // Root siempre tiene permiso
+        if (usuario.isPrivilegiado()) {
+            return true;
+        }
+
+        // Extraer permisos: ejemplo 77 → propietario=7, grupo=7
+        int permisosPropietario = (inodo.permisos / 10) % 10;
+        int permisosGrupo = inodo.permisos % 10;
+
+        int permisosAplicables;
+
+        if (usuario.getUid() == inodo.propietario) {
+            permisosAplicables = permisosPropietario;
+        } else if (usuario.getGid() == inodo.grupo || usuario.getGrupos_secundarios().contains(inodo.grupo)) {
+            permisosAplicables = permisosGrupo;
+        } else {
+            // No coincide ni con dueño ni con grupo → no tiene permisos
+            System.out.println("No tiene permisos para realizar esta operacion.");
+            return false;
+        }
+
+        // Caso especial: si es 7, tiene todos los permisos
+        if (permisosAplicables == 7) {
+            return true;
+        }
+
+        // Validar operación
+        switch (operacion.toLowerCase()) {
+            case "read":
+                return (permisosAplicables & 4) != 0; // bit de lectura
+            case "write":
+                return (permisosAplicables & 2) != 0; // bit de escritura
+            case "execute":
+                return (permisosAplicables & 1) != 0; // bit de ejecución
+            default:
+                System.out.println("Operacion desconocida: " + operacion);
+                return false;
+        }
     }
 
     /**

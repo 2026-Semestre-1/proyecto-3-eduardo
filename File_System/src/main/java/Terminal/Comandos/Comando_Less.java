@@ -21,7 +21,7 @@ public class Comando_Less implements Comando {
         try {
             GestorDisco disco = new GestorDisco(GestorDisco.get_ruta());
 
-            disco.establecer_archivo_abierto(nombreArchivo, "r");
+            // disco.establecer_archivo_abierto(nombreArchivo, "r");
             String contenido = disco.leer_archivo(nombreArchivo);
             System.out.println(contenido);
             System.out.println("\n--- Presione 'q' para salir ---");
@@ -30,7 +30,7 @@ public class Comando_Less implements Comando {
             while (true) {
                 String linea = sc.nextLine().trim();
                 if (linea.equals("q")) {
-                    disco.cerrar_archivo_abierto(nombreArchivo);
+                    // disco.cerrar_archivo_abierto(nombreArchivo);
                     break;
                 } else {
                     System.out.println("Comando no reconocido. Use 'q' para salir.");
