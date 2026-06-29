@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.Date;
 
 import Archivos.Archivo;
@@ -585,38 +586,6 @@ public class GestorDisco {
         }
     }
 
-    public int asignar_bloque_libre() throws IOException {
-        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
-            System.out.println("Buscando bloque libre...");
-
-            // Leer bitmap desde bloques 4–10
-            byte[] datosBM = BitMapBloques.leerBitmap(archivo);
-
-            // System.out.println("pass 1");
-            BitMapBloques bm = BitMapBloques.deserializar(datosBM);
-            // System.out.println("pass 2");
-
-            // Buscar bloque libre
-            int bloque_libre = bm.buscar_libre();
-            if (bloque_libre == -1) {
-                throw new IOException("No hay bloques libres disponibles.");
-            }
-            // System.out.println("pass 3");
-
-            // Marcarlo como ocupado
-            bm.marcar_ocupado(bloque_libre);
-            // System.out.println("pass 4");
-
-            // Guardar bitmap actualizado en bloques 4–10
-            byte[] nuevosDatosBM = bm.serializar();
-            BitMapBloques.escribirBitmap(archivo, nuevosDatosBM);
-
-            System.out.println("Bloque asignado: " + bloque_libre);
-
-            return bloque_libre;
-        }
-    }
-
     /**
      * Nombre: ls
      * 
@@ -712,6 +681,111 @@ public class GestorDisco {
 
     // Seccion para la eliminacion de archivos o direcotiros.
 
+    public void procesar_eliminacion(String objetivo, boolean recursivo) {
+        try (RandomAccessFile archivo = new RandomAccessFile(GestorDisco.get_ruta(), "rw")) {
+
+            // Soporte para expresiones regulares
+            Pattern pattern = Pattern.compile(objetivo.replace("*", ".*"));
+            Inodo cwd = Inodo.leerInodo(archivo, cwd_inodo);
+            int bloqueDatos = cwd.bloques_asignados.get(0);
+
+            System.out.println("DEBUG: bloqueDatos Pass 1");
+            String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos,
+                    tam_bloque);
+
+            System.out.println("DEBUG: bloqueDatos Pass 2");
+
+            for (String linea : contenido.split("\n")) {
+                System.out.println("DEBUG: bloqueDatos Pass 2.5 " + linea);
+                if (!linea.isBlank()) {
+                    String[] datos = linea.split(";");
+                    System.out.println("DEBUG: bloqueDatos Pass 3");
+                    if (datos.length >= 3) {
+                        System.out.println("DEBUG: bloqueDatos Pass 3.5 " + datos.length);
+                        String nombre = datos[0];
+                        int hijoInodo = Integer.parseInt(datos[2]);
+                        if (pattern.matcher(nombre).matches()) {
+                            System.out.println("DEBUG: bloqueDatos Pass 3.8");
+                            eliminar(archivo, hijoInodo, recursivo);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Error en rm: " + e.getMessage());
+        }
+
+    }
+
+    public boolean eliminar(RandomAccessFile archivo, int inodoObjetivo, boolean recursivo) {
+        try {
+            Inodo inodo = Inodo.leerInodo(archivo, inodoObjetivo);
+
+            System.out.println("Pass 4");
+            // Si es directorio y recursivo, eliminar contenido
+            if (inodo.es_directorio && recursivo) {
+                int bloqueDatos = inodo.bloques_asignados.get(0);
+                String contenido = manipular_contenido_bloques.leerBloque(archivo, bloqueDatos, tam_bloque);
+
+                for (String linea : contenido.split("\n")) {
+                    if (!linea.isBlank()) {
+                        String[] datos = linea.split(";");
+                        if (datos.length >= 3) {
+                            int hijoInodo = Integer.parseInt(datos[2]);
+                            if (!datos[0].equals(".") && !datos[0].equals("..")) {
+                                eliminar(archivo, hijoInodo, true);
+                            }
+                        }
+                    }
+                }
+
+            } else if (inodo.es_directorio && !recursivo) {
+                System.out.println("Pass 5");
+
+                System.out.println("Error: no se puede eliminar un directorio sin -R.");
+                return false;
+            }
+
+            // Liberar bloques de datos
+            for (int bloque : inodo.bloques_asignados) {
+                liberar_bloque(bloque);
+            }
+
+            // Liberar inodo, hay que restarle el inodo base para que de la psiscion real.
+            liberar_inodo(inodo.numero - inodo_base);
+
+            // Eliminar referencia en el padre
+            eliminar_referencia_en_padre(archivo, inodo.inodo_padre, inodo.numero);
+
+            // Limpiar restar a la cantidad de bloques libres:
+            archivo.seek(2 * tam_bloque);
+            byte[] buffer = new byte[tam_bloque];
+            archivo.read(buffer);
+            SuperBloque sb = SuperBloque.deserializar(buffer);
+            sb.bloques_libres++;
+
+            // Actualizar superbloque
+            archivo.seek(2 * tam_bloque);
+            archivo.write(sb.serializar());
+
+            System.out.println("Elemento eliminado: " + inodo.nombre);
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error al eliminar: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Nombre: eliminar_referencia_en_padre
+     * 
+     * Descripcion: Elimina la referencia de un archivo o directorio en su padre.
+     * 
+     * @param archivo    El archivo que contiene los datos.
+     * @param inodoPadre El inodo del padre.
+     * @param inodoHijo  El inodo del hijo.
+     * @throws IOException Si ocurre un error al leer o escribir en el archivo.
+     */
     public void eliminar_referencia_en_padre(RandomAccessFile archivo, int inodoPadre, int inodoHijo)
             throws IOException {
         Inodo padre = Inodo.leerInodo(archivo, inodoPadre);
@@ -739,6 +813,16 @@ public class GestorDisco {
 
     // Seccion para renombrar o mover archivo o directorios.
 
+    /**
+     * Nombre: mover_renombrar
+     * 
+     * Descripcion: Mueve o renombra un archivo o directorio.
+     * 
+     * @param origen  El archivo o directorio a mover o renombrar.
+     * @param destino El destino al que se va a mover o renombrar el archivo o
+     *                directorio.
+     * @throws IOException Si ocurre un error al leer o escribir en el archivo.
+     */
     public void mover_renombrar(String origen, String destino) throws IOException {
         try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
             int inodoPadre = getCwdInodo();
@@ -774,63 +858,6 @@ public class GestorDisco {
                 System.out.println("Error al mover elemento.");
             }
             return;
-
-            // // Validar permisos
-            // if (usuario_actual.getUid() != 1) { // no es root
-            // boolean esPropietario = usuario_actual.getUid() == inodoObj.propietario;
-            // boolean esGrupo = usuario_actual.getGid() == inodoObj.grupo;
-
-            // int permisosDueño = inodoObj.permisos / 10; // primer dígito
-            // int permisosGrupo = inodoObj.permisos % 10; // segundo dígito
-
-            // if (esPropietario && permisosDueño != 7) {
-            // System.out.println("Error: el propietario no tiene permisos suficientes.");
-            // return;
-            // }
-            // if (esGrupo && permisosGrupo != 7) {
-            // System.out.println("Error: el grupo no tiene permisos suficientes.");
-            // return;
-            // }
-            // if (!esPropietario && !esGrupo) {
-            // System.out.println("Error: usuario sin permisos para mover/renombrar.");
-            // return;
-            // }
-            // }
-
-            // // Resolver destino
-            // int inodoDestino;
-            // if (destino.contains("/")) {
-            // inodoDestino = buscar_inodo_por_ruta(destino);
-            // } else {
-            // inodoDestino = buscar_inodo_en_directorio(archivo, inodoPadre, destino);
-            // }
-
-            // if (inodoDestino != -1) {
-            // Inodo destinoInodo = Inodo.leerInodo(archivo, inodoDestino);
-            // if (!destinoInodo.es_directorio) {
-            // System.out.println("Error: el destino debe ser un directorio.");
-            // return;
-            // }
-
-            // // Validar que no se mueva un padre dentro de un hijo
-            // if (es_descendiente(inodoDestino, inodoOrigen, archivo)) {
-            // System.out.println("Error: no se puede mover un directorio padre dentro de su
-            // hijo.");
-            // return;
-            // }
-
-            // // Movimiento: actualizar inodo padre
-            // inodoObj.inodo_padre = destinoInodo.numero;
-            // Inodo.escribirInodo(archivo, inodoOrigen, inodoObj);
-            // System.out.println("Elemento movido: " + origen + " → " + destino);
-            // } else {
-            // // Renombrado
-            // String[] partes = destino.split("/");
-            // String nuevoNombre = partes[partes.length - 1];
-            // inodoObj.nombre = nuevoNombre;
-            // Inodo.escribirInodo(archivo, inodoDestino, inodoObj);
-            // System.out.println("Elemento renombrado: " + origen + " → " + nuevoNombre);
-            // }
         }
     }
 
@@ -1745,6 +1772,100 @@ public class GestorDisco {
             BitMapInodos.escribir_bitmap(archivo, bm.serializar());
 
             return indice; // índice dentro de la tabla de inodos
+        }
+    }
+
+    /**
+     * Nombre: asignar_bloque_libre
+     * 
+     * Descripcion: Asigna un bloque libre del mapa de bloques, este bloque se
+     * utiliza para almacenar el contenido de los archivos y directorios.
+     * 
+     * @return El bloque que esta libre en el mapa de bloques, pero lo que devuelve
+     *         es el indice del mapa de bloques, se debe de operar con el bloque
+     *         base
+     *         para obtener el numero real del bloque.
+     * @throws IOException Si no se encuentra el bloque o algun error de acceso.
+     */
+    public int asignar_bloque_libre() throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            System.out.println("Buscando bloque libre...");
+
+            // Leer bitmap desde bloques 4–10
+            byte[] datosBM = BitMapBloques.leerBitmap(archivo);
+
+            // System.out.println("pass 1");
+            BitMapBloques bm = BitMapBloques.deserializar(datosBM);
+            // System.out.println("pass 2");
+
+            // Buscar bloque libre
+            int bloque_libre = bm.buscar_libre();
+            if (bloque_libre == -1) {
+                throw new IOException("No hay bloques libres disponibles.");
+            }
+            // System.out.println("pass 3");
+
+            // Marcarlo como ocupado
+            bm.marcar_ocupado(bloque_libre);
+            // System.out.println("pass 4");
+
+            // Guardar bitmap actualizado en bloques 4–10
+            byte[] nuevosDatosBM = bm.serializar();
+            BitMapBloques.escribirBitmap(archivo, nuevosDatosBM);
+
+            System.out.println("Bloque asignado: " + bloque_libre);
+
+            return bloque_libre;
+        }
+    }
+
+    /**
+     * Nombre: liberar_bloque
+     * 
+     * Descripcion: Libera un bloque del mapa de bloques.
+     * 
+     * @param indiceBloque El bloque que se desea liberar.
+     * @throws IOException Si ocurre un error al liberar el bloque.
+     */
+    public void liberar_bloque(int indiceBloque) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            // Leer bitmap desde bloques 4–10
+            byte[] datosBM = BitMapBloques.leerBitmap(archivo);
+            BitMapBloques bm = BitMapBloques.deserializar(datosBM);
+
+            // Marcar bloque como libre
+            bm.marcar_libre(indiceBloque);
+
+            // Guardar bitmap actualizado en bloques 4–10
+            byte[] nuevosDatosBM = bm.serializar();
+            BitMapBloques.escribirBitmap(archivo, nuevosDatosBM);
+
+            System.out.println("Bloque liberado: " + indiceBloque);
+        }
+    }
+
+    /**
+     * Nombre: liberar_inodo
+     * 
+     * Descripcion: Libera un inodo del mapa de inodos.
+     * 
+     * @param indiceInodo El inodo que se desea liberar.
+     * @throws IOException Si ocurre un error al liberar el inodo.
+     */
+    public void liberar_inodo(int indiceInodo) throws IOException {
+        try (RandomAccessFile archivo = new RandomAccessFile(ruta, "rw")) {
+            // Leer bitmap de inodos desde bloques reservados (14–15)
+            byte[] datosBM = BitMapInodos.leer_bitmap(archivo);
+            BitMapInodos bm = BitMapInodos.deserializar(datosBM);
+
+            // Marcar inodo como libre
+            bm.marcar_libre(indiceInodo);
+
+            // Guardar bitmap actualizado en disco
+            byte[] nuevosDatosBM = bm.serializar();
+            BitMapInodos.escribir_bitmap(archivo, nuevosDatosBM);
+
+            System.out.println("Inodo liberado: " + indiceInodo);
         }
     }
 

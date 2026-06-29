@@ -130,6 +130,11 @@ public class Terminal {
                     cmdCd.ejecutar(partes);
                     break;
 
+                case "rm":
+                    Comando_Rm cmdRm = new Comando_Rm();
+                    cmdRm.ejecutar(partes);
+                    break;
+
                 case "mv":
                     Comando_Mv cmdMv = new Comando_Mv();
                     cmdMv.ejecutar(partes);
