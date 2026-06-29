@@ -4,5 +4,8 @@
 ### [2023152827] [Eduardo Rojas Gómez]
 
 ### Estado del proyecto: 2
-### Enlace del video: 
+
+### Documentación de la estrategia de asignación
+[Estartegia de implementación y guia base del proyecto](./Docs/Estrategia_Asignacion_Memoria.md)
+
 

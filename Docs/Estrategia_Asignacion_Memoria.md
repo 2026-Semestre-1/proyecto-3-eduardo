@@ -51,7 +51,7 @@ graph TD
 
 ### ¿Cómo funciona en el código?
 
-En [Inodo.java](file:///c:/Programacion/Proyecto_3_Operativos/proyecto-3-eduardo/File_System/src/main/java/Directorios/Inodo.java), cada archivo y directorio está representado por una instancia de `Inodo` que contiene la lista de bloques que le pertenecen:
+En [Inodo.java](../File_System/src/main/java/Directorios/Inodo.java), cada archivo y directorio está representado por una instancia de `Inodo` que contiene la lista de bloques que le pertenecen:
 
 ```java
 public List<Integer> bloques_asignados; // Soporta múltiples bloques asignados
@@ -88,7 +88,7 @@ Ubicado en los bloques **14 al 15** del disco.
 
 ### Proceso de Asignación y Liberación
 
-Cuando se crea un elemento (métodos en [GestorDisco.java](file:///c:/Programacion/Proyecto_3_Operativos/proyecto-3-eduardo/File_System/src/main/java/Nucleo/GestorDisco.java)):
+Cuando se crea un elemento (métodos en [GestorDisco.java](../File_System/src/main/java/Nucleo/GestorDisco.java)):
 1. Se invoca a `asignar_inodo_libre()`, el cual lee el bitmap de inodos, localiza el primer bit en `false`, lo marca como `true`, guarda el bitmap en disco y devuelve el índice.
 2. Se invoca a `asignar_bloque_libre()`, que realiza el mismo proceso sobre el bitmap de bloques de datos.
 3. Se resta 1 al contador de `bloques_libres` en el **Superbloque**.
