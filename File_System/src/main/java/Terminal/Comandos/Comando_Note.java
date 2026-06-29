@@ -57,50 +57,15 @@ public class Comando_Note implements Comando {
                         manipular_contenido_bloques.leerBloque(archivo, bloque, disco.get_tam_bloque()));
             }
 
-            // Verificar permisos
-            boolean tienePermiso = false;
+            // Verificacion de permisos
 
-            // Si el usuario actual es root (uid = 1), siempre tiene permiso
-            // if (uidActual == 1) {
-            // tienePermiso = true;
-            // } else {
-            // // Si el usuario es propietario
-            // if (archivoInodo.propietario == uidActual) {
-            // // Verificar permisos de propietario (primeros 3 caracteres: rwx)
-            // String permisosPropietario = archivoInodo.permisos.substring(0, 3);
-            // if (permisosPropietario.contains("w")) {
-            // tienePermiso = true;
-            // }
-            // }
-            // // Si el usuario pertenece al grupo
-            // else if (archivoInodo.grupo == gidActual) {
-            // // Verificar permisos de grupo (caracteres 3–6: rwx)
-            // String permisosGrupo = archivoInodo.permisos.substring(3, 6);
-            // if (permisosGrupo.contains("w")) {
-            // tienePermiso = true;
-            // }
-            // }
-            // // Otros usuarios
-            // else {
-            // // Verificar permisos de otros (caracteres 6–9: rwx)
-            // String permisosOtros = archivoInodo.permisos.substring(6, 9);
-            // if (permisosOtros.contains("w")) {
-            // tienePermiso = true;
-            // }
-            // }
-            // }
+            boolean permiso = disco.validar_permisos(archivoInodo, GestorDisco.get_usuario_actual(), "w");
 
-            // if (!tienePermiso) {
-            // System.out.println("Permisos insuficientes para editar el archivo.");
-            // return;
-            // }
+            if (!permiso) {
+                System.out.println("No tiene permisos para editar el archivo");
+                return;
+            }
 
-            // Leer contenido actual
-            // int bloqueDatos = archivoInodo.bloques_asignados.get(0);
-            // String contenidoActual = manipular_contenido_bloques.leerBloque(archivo,
-            // bloqueDatos,
-            // disco.get_tam_bloque());
-            // Simular textArea: mostrar contenido editable
             System.out.println("\n--- Editor Note ---");
             System.out.println("Contenido actual (editable):");
             System.out.println(contenidoActual.toString());
